@@ -9,7 +9,7 @@ Source Code is made available under the MIT License.
 
 ### In Development
 
-(2017-03-06 (db))
+(2017-05-31 (db))
 
 Warning: alpha quality code.
 
@@ -67,6 +67,8 @@ but here is a brief description of some of the tools so that you can get an idea
     In more extended cases, it prints the data across rather than down,
     which can be useful for reading CSV data in a terminal.
 * `csv-distinct` : Finds distict values in a column of a CSV file.
+* `csv-filter` : Very simplistic row filter
+* `csv-join` : Joins records from an input CSV to records in a base CSV file.
 * `csv-json` : Does a simplistic conversion of JSON to CSV.
 * `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
 * `csv-rowcalc` : Runs a python script for each row in a CSV file.
