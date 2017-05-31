@@ -1,26 +1,34 @@
-##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.  ##
 
 ## #python-3.x
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
 help_text = (
-    "CSV-TRANSLATE tool version 20160916:20170531\n"
-    "Translates delimited text encodings\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
+    "CSV-FILTER tool version 20170330\n"
+    "Selects rows from a CSV file\n"
+    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
-    "csv-translate [OPTIONS] [InputFile]\n"
+    "csv-filter [OPTIONS] FilterArguments... [InputFile]\n"
     "\n"
     "OPTIONS\n"
-    "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -K {N}  Number of rows to skip from the input (default=0)\n"
-    "    -N {N}  Maximum number of rows to read (default=ALL)\n"
-    "    -n {N}  Maximum number of rows to write (default=ALL)\n"
     "    -o {F}  Output file name\n"
-    "    -S {S}  Input file field delimiter (default ',')\n"
-    "    -s {S}  Output file field delimiter (default ',')\n"
-    "    -W {S}  Input line terminator (default '\\r\\n')\n"
-    "    -w {S}  Output line terminator (default '\\r\\n')\n"
+    "\n"
+    "The FilterArguments indicates which rows will be selected.\n"
+    "\n"
+    "The tool will recognize a filter argument sequence of the form:\n"
+    "\n"
+    "    {ColumnName} {OP} {Value}\n"
+    "\n"
+    "Arguments must be separated by whitespace.\n"
+    "\n"
+    "Valid operators ({OP}) are: '=', '!=', 'is', 'isnt'.\n"
+    "'is'/'isnt' and '='/'!=' behave similarly, but 'is' will recognize \n"
+    "a value of 'NULL' as a NULL value (and not the character string 'NULL').\n"
+    "\n"
+    "For example:\n"
+    "\n"
+    "    csv-filter COMPOUND = CHLORPYRIFOS  EPest.csv\n"
+    "\n"
 )
 
 import sys
@@ -43,12 +51,10 @@ def main(arg_list, stdin, stdout, stderr):
     output_row_terminator = 'std'
     input_charset_name = 'utf_8_sig'
     output_charset_name = 'utf_8'
-    output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
-    input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    output_charset_error_mode = 'strict'
+    input_charset_error_mode = 'strict'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
-    input_row_start_offset = 0
-    input_row_count_max = None
-    output_row_count_max = None
+    filter_arg_list = list()
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -120,7 +126,7 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--terminator-in"
           or arg == "--newline-in"
           or arg == "--endline-in"
-          ):
+        ):
             if (arg_index < arg_count):
                 arg_index += 1
                 arg = arg_list[arg_index]
@@ -129,50 +135,26 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--terminator-out"
           or arg == "--newline-out"
           or arg == "--endline-out"
-          ):
+        ):
             if (arg_index < arg_count):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_row_terminator = arg
         elif (arg == "--cell-width-limit"
-          ):
+        ):
             if (arg_index < arg_count):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
-        elif (arg == "-K"
-            or arg == "--row-offset-in"
-            or arg == "--offset"
-            or arg == "--skip"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                input_row_start_offset = int(arg)
-        elif (arg == "-N"
-            or arg == "--row-count-in"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    input_row_count_max = None
-                else:
-                    input_row_count_max = int(arg)
-        elif (arg == "-n"
-            or arg == "--row-count-out"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    output_row_count_max = None
-                else:
-                    output_row_count_max = int(arg)
         elif (None != arg
           and 0 < len(arg)
-          ):
-            if (None == input_file_name):
+        ):
+            # [20170330 [db] This is sort of a hack to "parse" the filter expression
+            #  based on the fact that we only currently support a Name=Value expression
+            #  (which consists of 3 distinct tokens/arguments)]
+            if (3 > len(filter_arg_list)):
+                filter_arg_list.append(arg)
+            elif (None == input_file_name):
                 input_file_name = arg
         arg_index += 1
 
@@ -226,24 +208,12 @@ def main(arg_list, stdin, stdout, stderr):
             if (out_close_file):
                 out_file = out_io
 
-            in_csv = csv.reader(
-                in_io
-                ,delimiter=input_delimiter
-                ,lineterminator=input_row_terminator
-                )
-            out_csv = csv.writer(
-                out_io
-                ,delimiter=output_delimiter
-                ,lineterminator=output_row_terminator
-                )
+            in_csv = csv.reader(in_io, delimiter=input_delimiter, lineterminator=input_row_terminator)
+            out_csv = csv.writer(out_io, delimiter=output_delimiter, lineterminator=output_row_terminator)
             execute(
-                in_csv
+                 in_csv
                 ,out_csv
-                ,input_row_terminator
-                ,output_row_terminator
-                ,input_row_start_offset
-                ,input_row_count_max
-                ,output_row_count_max
+                ,filter_arg_list
                 )
         except BrokenPipeError:
             pass
@@ -256,45 +226,105 @@ def main(arg_list, stdin, stdout, stderr):
 def execute(
     in_csv
     ,out_csv
-    ,input_row_terminator
-    ,output_row_terminator
-    ,in_row_offset_start
-    ,in_row_count_max
-    ,out_row_count_max
+    ,filter_arg_list
 ):
     end_row = None
-    cr_newline = '\r'
-    lf_newline = '\n'
-    crlf_newline = '\r\n'
-    out_newline = output_row_terminator
+    row_is_selected = None
+    header_row = next(in_csv, end_row)
+    if (None != header_row):
+        row_is_selected = compile_filter_expression(
+            filter_arg_list
+            ,header_row
+            )
+    if (None != row_is_selected):
+        out_csv.writerow(header_row)
+        for in_row in in_csv:
+            if (row_is_selected(in_row)):
+                out_csv.writerow(in_row)
+
+
+def normalize_column_name(in_column_name):
+    out_column_name = in_column_name
+    if (None != out_column_name):
+        out_column_name = out_column_name.strip()
+        out_column_name = out_column_name.lower()
+    return out_column_name
+
+def coalesce_cell_value(in_cell_value, default_cell_value):
+    out_cell_value = in_cell_value
+    if (None == out_cell_value):
+        out_cell_value = default_cell_value
+    elif (0 == len(out_cell_value)):
+        out_cell_value = default_cell_value
+    return out_cell_value
+
+def compile_filter_expression(
+    filter_arg_list
+    ,header_row
+):
+    f_op_eq = '='
+    f_op_not_eq = '!='
+    f_op_is = 'is'
+    f_op_is_not = 'isnt'
+
+    column_name_list = list()
+    column_position_lookup = dict()
+    if (None != header_row):
+        column_position = 0
+        while (column_position < len(header_row)):
+            column_name = header_row[column_position]
+            column_name = normalize_column_name(column_name)
+            column_name_list.append(column_name)
+            column_position_lookup[column_name] = column_position
+            column_position += 1
+
+    f_column_name = None
+    f_op = None
+    f_column_value = None
+    if 0 < len(filter_arg_list):
+        f_column_name = filter_arg_list[0]
+        f_column_name = normalize_column_name(f_column_name)
+    if 1 < len(filter_arg_list):
+        f_op = filter_arg_list[1]
+        f_op = f_op.strip()
+        f_op = f_op.lower()
+    if 2 < len(filter_arg_list):
+        f_column_value = filter_arg_list[2]
     
-    in_row_count = 0
-    out_row_count = 0
-    in_row = next(in_csv, end_row)
-    while (end_row != in_row
-        and (None == in_row_count_max or in_row_count < in_row_count_max)
-        and (None == out_row_count_max or out_row_count < out_row_count_max)
+    if (None != f_column_value):
+        if ("''" == f_column_value):
+            f_column_value = ''
+        elif (f_op in  {f_op_is,f_op_is_not}
+            and "NULL" == f_column_value
+        ):
+            f_column_value = None
+
+    f_value_predicate = None
+    if (f_op_eq == f_op):
+        f_value_predicate = lambda cell_value : (cell_value == f_column_value)
+    elif (f_op_not_eq == f_op):
+        f_value_predicate = lambda cell_value : (cell_value != f_column_value)
+    elif (f_op_is == f_op):
+        f_value_predicate = lambda cell_value : (f_column_value == coalesce_cell_value(cell_value, None))
+    elif (f_op_is_not == f_op):
+        f_value_predicate = lambda cell_value : (f_column_value != coalesce_cell_value(cell_value, None))
+
+    f_column_position = column_position_lookup.get(f_column_name, None)
+
+    def row_is_selected(in_row):
+        cell_value = None
+        if (f_column_position < len(in_row)):
+            cell_value = in_row[f_column_position]
+        return f_value_predicate(cell_value)
+
+    f_row_predicate = None
+    if (None != f_column_position
+        and None != f_value_predicate
     ):
-        in_row_count += 1
-        if (in_row_offset_start < in_row_count):
-            out_row = list(in_row)
-            column_count = len(out_row)
-            column_position = 0
-            while (column_position < column_count):
-                cell_value = out_row[column_position]
-                # fix newline characters in the data
-                # (some tools - like postgres - can't handle mixed newline chars)
-                if (None != cell_value):
-                    # replace crlf with lf, then we will replace lf's with the output newline,
-                    #  this prevents us from turning a crlf into a double newline
-                    cell_value = cell_value.replace(crlf_newline, lf_newline)
-                    cell_value = cell_value.replace(cr_newline, lf_newline)
-                    cell_value = cell_value.replace(lf_newline, out_newline)
-                    out_row[column_position] = cell_value
-                column_position += 1
-            out_csv.writerow(out_row)
-            out_row_count += 1
-        in_row = next(in_csv, end_row)
+        f_row_predicate = row_is_selected
+    
+    return f_row_predicate
+
 
 if __name__ == "__main__":
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)

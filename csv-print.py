@@ -1,14 +1,16 @@
 ##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
 
 help_text = (
-    "CSV-PRINT tool version 20170220\n"
+    "CSV-PRINT tool version 20170220:20170518\n"
     "Prints a fixed-width representation of a CSV file\n"
     "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-print [OPTIONS] [InputFile]\n"
     "\n"
     "OPTIONS\n"
+    "    -H      Don't skip the header row when analyzing column width\n"
     "    -N {N}  Number of input rows to analyze for column widths (default=1)\n"
+    "    -n {N}  Number of rows to print (default=all)\n"
     "    -o {F}  Output file name\n"
     "    --min-width {N}  Minimum column width (default=1)\n"
     "    --max-width {N}  Maximum column width (default=unbounded)\n"
@@ -40,12 +42,15 @@ def main(arg_list, stdin, stdout, stderr):
     column_name_list_string = None
     column_width_list_string = None
     analyze_row_count_string = None
+    out_row_count_max_string = None
     column_width_min_string = None
     column_width_max_string = None
     analyze_row_count = 1
+    out_row_count_max = None
     column_width_min = 1
     column_width_max = None
     truncation_symbol = "-"
+    should_analyze_header_row = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -125,6 +130,13 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 analyze_row_count_string = arg
+        elif (arg == "-n"
+          or arg == "--out-row-count-max"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                out_row_count_max_string = arg
         elif (arg == "--min-width"
           ):
             if (arg_index < arg_count):
@@ -156,6 +168,10 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 truncation_symbol = arg
+        elif (arg == "-H"
+            or arg == "--analyze-header"
+        ):
+            should_analyze_header_row = True
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -178,11 +194,24 @@ def main(arg_list, stdin, stdout, stderr):
         in_file = None
         out_file = None
         try:
+            if (None != out_row_count_max_string):
+                if ("all" == out_row_count_max_string.lower()):
+                    out_row_count_max = None
+                else:
+                    out_row_count_max = int(out_row_count_max_string)
             if (None != analyze_row_count_string):
                 if ("all" == analyze_row_count_string.lower()):
                     analyze_row_count = None
                 else:
                     analyze_row_count = int(analyze_row_count_string)
+            # ensure the number of rows to analyze is not greater
+            #  than the number of rows to output
+            if (None != out_row_count_max
+                and (None == analyze_row_count
+                    or out_row_count_max < analyze_row_count
+                )
+            ):
+                analyze_row_count = out_row_count_max
             if (None != column_width_min_string):
                 column_width_min = int(column_width_min_string)
             if (None != column_width_max_string):
@@ -226,8 +255,10 @@ def main(arg_list, stdin, stdout, stderr):
                 ,column_name_list
                 ,column_width_list
                 ,analyze_row_count
+                ,out_row_count_max
                 ,column_width_min
                 ,column_width_max
+                ,should_analyze_header_row
                 )
         except BrokenPipeError:
             pass
@@ -246,8 +277,10 @@ def execute(
     ,column_name_list
     ,column_width_fixed_list
     ,analyze_row_count
+    ,out_row_count_max
     ,column_width_min
     ,column_width_max
+    ,should_analyze_header_row
 ):
     end_row = None
     in_header_row = next(in_csv, end_row)
@@ -285,12 +318,17 @@ def execute(
         column_width_list = []
         row_count = 0
         in_row_list = []
-        # append header row to list since we will format it into a column too
-        in_row_list.append(in_header_row)
+        if (not should_analyze_header_row):
+            # if we are not going to analyze the header row,
+            #  then add it to our row list buffer now so it will get printed later.
+            in_row_list.append(in_header_row)
         if (None == analyze_row_count 
             or 0 < analyze_row_count
         ):
-            in_row = next(in_csv, end_row)
+            if (should_analyze_header_row):
+                in_row = in_header_row
+            else:
+                in_row = next(in_csv, end_row)
             while (end_row != in_row
                 and (None == analyze_row_count
                     or row_count < analyze_row_count
@@ -334,7 +372,9 @@ def execute(
             row_list_position += 1
         else:
             in_row = next(in_csv, end_row)
-        while (end_row != in_row):
+        while (end_row != in_row
+            and (None == out_row_count_max or row_count < out_row_count_max)
+            ):
             out_row = []
             out_column_position = 0
             while (out_column_position < len(column_position_map)):

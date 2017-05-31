@@ -1,19 +1,18 @@
 ##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
 
 help_text = (
-    "CSV-DISTINCT tool version 20160927:20170215\n"
+    "CSV-DISTINCT tool version 20160927:20170512\n"
     "Find distinct cell values in a column of a CSV file\n"
     "Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
-    "csv-distinct [OPTIONS] SourceColumnName [InputFile]\n"
+    "csv-distinct [OPTIONS] SourceColumns [InputFile]\n"
     "\n"
     "OPTIONS\n"
-    "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
     "    -F {F}  Column/Field name for counter column\n"
     "    -o {F}  Output file name\n"
-    "    -S {S}  Input file field delimiter\n"
-    "    -s {S}  Output file field delimiter\n"
+    "    --ignore-case   Ignore character case when comparing values\n"
+    "\n"
+    "SourceColumns is a comma-separated list of column names found in the input stream.\n"
 )
 
 import sys
@@ -37,8 +36,9 @@ def main(arg_list, stdin, stdout, stderr):
     input_charset_name = 'utf_8_sig'
     output_charset_name = 'utf_8'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
-    in_source_column_name = None
+    in_source_column_name_list_string = None
     in_counter_column_name = None
+    should_ignore_case = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -118,21 +118,26 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
+        elif (arg == "--ignore-case"):
+            should_ignore_case = True
         elif (None != arg
           and 0 < len(arg)
           ):
-            if (None == in_source_column_name):
-                in_source_column_name = arg
+            if (None == in_source_column_name_list_string):
+                in_source_column_name_list_string = arg
             elif (None == input_file_name):
                 input_file_name = arg
         arg_index += 1
 
-    if (None == in_source_column_name):
+    if (None == in_source_column_name_list_string):
         show_help = True
 
     if (show_help):
         out_io.write(help_text)
     else:
+        in_source_column_name_list = []
+        if (None != in_source_column_name_list_string):
+            in_source_column_name_list = in_source_column_name_list_string.split(',')
         # set global CSV column width
         if (None != csv_cell_width_limit):
             csv.field_size_limit(csv_cell_width_limit)
@@ -164,8 +169,9 @@ def main(arg_list, stdin, stdout, stderr):
                   out_csv, 
                   input_delimiter, 
                   output_delimiter,
-                  in_source_column_name,
+                  in_source_column_name_list,
                   in_counter_column_name 
+                  ,should_ignore_case
                   )
             except BrokenPipeError:
                 # ignore BrokenPipeError; it is raised when a downstream process exits early (head.exe does this)
@@ -179,53 +185,85 @@ def main(arg_list, stdin, stdout, stderr):
             if (None != out_file):
                 out_file.close()
 
-def execute(in_csv, out_csv, input_delimiter, output_delimiter, in_source_column_name, in_counter_column_name):
+def execute(
+    in_csv
+    , out_csv
+    , input_delimiter
+    , output_delimiter
+    , in_source_column_name_list
+    , in_counter_column_name
+    , should_ignore_case
+    ):
     end_row = None
     end_cell = None
-    distinct_value_counters = dict()
-    in_source_column_name_lower = in_source_column_name.lower()
-    in_source_column_offset = None
-    in_row_offset = 0
-    in_row = next(in_csv, end_row)
+    distinct_row_counters = dict()
+    out_column_name_list = list()
+    in_source_column_position_list = list()
+    in_source_column_position = None
+    in_row_position = 0
+    in_row = end_row
     # find column offset from header row
-    if (None != in_row):
-        in_column_offset = 0
-        in_cell_iter = iter(in_row)
-        in_cell = next(in_cell_iter, end_cell)
-        while (None == in_source_column_offset
-          and end_cell != in_cell
-          ):
-            in_column_name_lower = in_cell.lower()
-            if (in_column_name_lower == in_source_column_name_lower):
-                in_source_column_offset = in_column_offset
-            in_column_offset += 1
-            in_cell = next(in_cell_iter, end_cell)
+    in_header_row = next(in_csv, end_row)
+    if (None != in_header_row):
+        out_column_position = 0
+        while (out_column_position < len(in_source_column_name_list)):
+            out_column_name = in_source_column_name_list[out_column_position]
+            out_column_name_norm = out_column_name.strip().lower()
+            found_column_position = len(in_header_row)
+            in_column_position = 0
+            while (found_column_position >= len(in_header_row)
+                and in_column_position < len(in_header_row)
+                ):
+                in_column_name = in_header_row[in_column_position]
+                in_column_name_norm = in_column_name.strip().lower()
+                if (in_column_name_norm == out_column_name_norm):
+                    found_column_position = in_column_position
+                in_column_position += 1
+            if (found_column_position < len(in_header_row)):
+                in_source_column_position_list.append(found_column_position)
+                out_column_name_list.append(out_column_name)
+            out_column_position += 1
+    
+    # look for distinct rows
+    if (0 < len(out_column_name_list)
+        and len(out_column_name_list) == len(in_source_column_position_list)
+        ):
         in_row = next(in_csv, end_row)
-    if (None != in_source_column_offset):
         while (end_row != in_row):
-            if (in_source_column_offset < len(in_row)):
-                in_cell = in_row[in_source_column_offset]
-                in_cell_value_count = distinct_value_counters.get(in_cell, None)
-                if (None == in_cell_value_count):
-                    in_cell_value_count = 1
-                else:
-                    in_cell_value_count += 1
-                distinct_value_counters[in_cell] = in_cell_value_count 
+            out_column_position = 0
+            out_row = list()
+            while (out_column_position < len(out_column_name_list)):
+                in_source_column_position = in_source_column_position_list[out_column_position]
+                cell_value = None
+                if (in_source_column_position < len(in_row)):
+                    cell_value = in_row[in_source_column_position]
+                if (None != cell_value
+                    and should_ignore_case
+                    ):
+                    cell_value = cell_value.upper()
+                out_row.append(cell_value)
+                out_column_position += 1
+
+            distinct_row_key = tuple(out_row)
+            distinct_row_count = distinct_row_counters.get(distinct_row_key, 0)
+            distinct_row_count += 1
+            distinct_row_counters[distinct_row_key] = distinct_row_count 
             in_row = next(in_csv, end_row)
+
     # write a header row
-    out_row = [in_source_column_name]
+    out_row = list(out_column_name_list)
     if (None != in_counter_column_name):
         out_row.append(in_counter_column_name)
     out_csv.writerow(out_row)
 
     # construct a new mutable list of the keys so that we can sort it
-    out_value_list = list(distinct_value_counters.keys())
-    out_value_list.sort()
-    for out_value in out_value_list:
-        out_row = [out_value]
+    distinct_row_list = list(distinct_row_counters.keys())
+    distinct_row_list.sort()
+    for distinct_row in distinct_row_list:
+        out_row = list(distinct_row)
         if (None != in_counter_column_name):
-            out_value_count = distinct_value_counters[out_value]
-            out_row.append(out_value_count)
+            distinct_row_count = distinct_row_counters[distinct_row]
+            out_row.append(distinct_row_count)
         out_csv.writerow(out_row)
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 ##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
 
 help_text = (
-    "CSV-ROWCALC tool version 20170217\n"
+    "CSV-ROWCALC tool version 20170217:20170531\n"
     "Executes a custom python script on each row of a CSV file\n"
     "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
@@ -9,6 +9,7 @@ help_text = (
     "\n"
     "OPTIONS\n"
     "    -a {S}  Comma separated list of additional columns to add to output\n"
+    "    -F {F}  Additional script file to include (option can be used multiple times)\n"
     "    -o {F}  Output file name\n"
     "    -X      Interpret the ScriptFile parameter as a Python statement (not a file name)\n"
     "    --row-var    {S}   Name of row map variable (default='row')\n"
@@ -18,6 +19,7 @@ help_text = (
     "in a context with some predefined variables, including one called 'row'\n"
     "which is a Python map (dict) of column names to cell values.\n"
     "Cell values may be altered by setting the values into the row map.\n"
+    "A row may be deleted from the output by setting the row variable to None.\n"
     "\n"
     "For example, to left-pad the column 'GEOID' with upto 5 zeros, the script might be:\n"
     "\n"
@@ -36,6 +38,7 @@ help_text = (
 import sys
 import csv
 import io
+import ast
 
 from csv_helpers import decode_delimiter_name, decode_charset_name, decode_newline
 
@@ -51,9 +54,12 @@ def main(arg_list, stdin, stdout, stderr):
     # 'std' will be translated to the standard line break decided by csv_helpers.decode_newline
     input_row_terminator = 'std'
     output_row_terminator = 'std'
-    input_charset_name = 'utf_8'
+    input_charset_name = 'utf_8_sig'
     output_charset_name = 'utf_8'
+    output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    include_script_file_name_list = []
     script_file_name = None
     script_content = None
     script_arg_is_code = False
@@ -93,6 +99,25 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_charset_name = arg
+        elif (arg == "--charset-in-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_charset_error_mode = arg
+        elif (arg == "--charset-out-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                output_charset_error_mode = arg
+        elif (arg == "--charset-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_charset_error_mode = arg
+                output_charset_error_mode = arg
         elif (arg == "-S"
           or arg == "--separator-in"
           or arg == "--delimiter-in"
@@ -154,6 +179,13 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--statement"
         ):
             script_arg_is_code = True
+        elif (arg == "-F"
+          or arg == "--include"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                include_script_file_name_list.append(arg)
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -173,6 +205,34 @@ def main(arg_list, stdin, stdout, stderr):
     if (show_help):
         out_io.write(help_text)
     else:
+        # combine the include scripts first
+        # [20170531 [db] I tried to compile these separately
+        #   so that the include file line numbers would be preserved properly,
+        #   but I failed to find a way to execute the combined code,
+        #   so I fell back to simply concating all the code together and compiling it once.]
+        include_script_content = None
+        for include_script_file_name in include_script_file_name_list:
+            include_script_file_content = read_file_content(include_script_file_name)
+            if (None == include_script_content):
+                include_script_content = include_script_file_content
+            elif (None != include_script_file_content):
+                include_script_content += "\n" + include_script_file_content
+
+        if (None != script_file_name
+            and None == script_content
+        ):
+            script_content = read_file_content(script_file_name)
+        
+        if (None == script_content):
+            script_content = include_script_content
+        elif (None != include_script_content):
+            script_content = include_script_content + "\n" + script_content
+        script_compiled_code = compile_script_content(script_content, script_file_name)
+
+        extra_column_name_list = []
+        if (None != extra_column_names_string):
+            extra_column_name_list = extra_column_names_string.split(",")
+
         # set global CSV column width
         if (None != csv_cell_width_limit):
             csv.field_size_limit(csv_cell_width_limit)
@@ -182,49 +242,58 @@ def main(arg_list, stdin, stdout, stderr):
         output_row_terminator = decode_newline(output_row_terminator)
         input_delimiter = decode_delimiter_name(input_delimiter)
         output_delimiter = decode_delimiter_name(output_delimiter) 
+
         in_file = None
         out_file = None
         try:
-            if (None != script_file_name
-                and None == script_content
-            ):
-                script_file = None
-                try:
-                    read_text_io_mode = 'rt'
-                    script_newline_mode = None  # universal newlines required for scripts
-                    script_charset_name = 'utf_8'
-                    script_file = io.open(script_file_name, mode=read_text_io_mode, encoding=script_charset_name, newline=script_newline_mode)
-                    script_content = script_file.read()
-                finally:
-                    if (None != script_file):
-                        script_file.close()
-            script_compiled_code = None
-            if (None != script_content):
-                script_compile_mode = 'exec'
-                script_source_name = '<string>'
-                if (None != script_file_name):
-                    script_source_name = script_file_name
-                script_compiled_code = compile(
-                     script_content
-                    ,script_source_name
-                    ,script_compile_mode
+            read_text_io_mode = 'rt'
+            #in_newline_mode = ''  # don't translate newline chars
+            in_newline_mode = input_row_terminator
+            in_file_id = input_file_name
+            in_close_file = True
+            if (None == in_file_id):
+                in_file_id = in_io.fileno()
+                in_close_file = False
+            in_io = io.open(
+                 in_file_id
+                ,mode=read_text_io_mode
+                ,encoding=input_charset_name
+                ,newline=in_newline_mode
+                ,errors=input_charset_error_mode
+                ,closefd=in_close_file
                 )
-            extra_column_name_list = []
-            if (None != extra_column_names_string):
-                extra_column_name_list = extra_column_names_string.split(",")
-            if (None != input_file_name):
-                read_text_io_mode = 'rt'
-                #in_newline_mode = ''  # don't translate newline chars
-                in_newline_mode = input_row_terminator
-                in_file = io.open(input_file_name, mode=read_text_io_mode, encoding=input_charset_name, newline=in_newline_mode)
-                in_io = in_file
-            if (None != output_file_name):
-                write_text_io_mode = 'wt'
-                out_newline_mode=''  # don't translate newline chars
-                out_file = io.open(output_file_name, mode=write_text_io_mode, encoding=output_charset_name, newline=out_newline_mode)
-                out_io = out_file
-            in_csv = csv.reader(in_io, delimiter=input_delimiter, lineterminator=input_row_terminator)
-            out_csv = csv.writer(out_io, delimiter=output_delimiter, lineterminator=output_row_terminator)
+            if (in_close_file):
+                in_file = in_io
+
+            write_text_io_mode = 'wt'
+            out_newline_mode=''  # don't translate newline chars
+            #out_newline_mode = output_row_terminator
+            out_file_id = output_file_name
+            out_close_file = True
+            if (None == out_file_id):
+                out_file_id = out_io.fileno()
+                out_close_file = False
+            out_io = io.open(
+                 out_file_id
+                ,mode=write_text_io_mode
+                ,encoding=output_charset_name
+                ,newline=out_newline_mode
+                ,errors=output_charset_error_mode
+                ,closefd=out_close_file
+                )
+            if (out_close_file):
+                out_file = out_io
+
+            in_csv = csv.reader(
+                in_io
+                ,delimiter=input_delimiter
+                ,lineterminator=input_row_terminator
+                )
+            out_csv = csv.writer(
+                out_io
+                ,delimiter=output_delimiter
+                ,lineterminator=output_row_terminator
+                )
             if (None != script_compiled_code):
                 execute(
                     in_csv
@@ -287,17 +356,78 @@ def execute(
             script_variables[row_offset_var_name] = row_count
             exec(script_compiled_code, script_variables)
 
-            out_row = list()
-            column_position = 0
-            while (column_position < len(out_header_row)):
-                column_name = out_header_row[column_position]
-                cell_value = row_dict.get(column_name, default_cell_value)
-                out_row.append(cell_value)
-                column_position += 1
-            out_csv.writerow(out_row)
+            # check if the row variable has been set to None
+            row_dict = script_variables[row_var_name]
+            if (None != row_dict):
+                out_row = list()
+                column_position = 0
+                while (column_position < len(out_header_row)):
+                    column_name = out_header_row[column_position]
+                    cell_value = row_dict.get(column_name, default_cell_value)
+                    out_row.append(cell_value)
+                    column_position += 1
+                out_csv.writerow(out_row)
 
             row_count += 1
             in_row = next(in_csv, end_row)
+
+def read_file_content(in_file_name):
+    read_text_io_mode = 'rt'
+    newline_mode = None  # universal newlines required for scripts
+    charset_name = 'utf_8'
+    file_content = None
+    in_file = None
+    try:
+        in_file = io.open(
+            in_file_name
+            ,mode=read_text_io_mode
+            ,encoding=charset_name
+            ,newline=newline_mode
+            )
+        file_content = in_file.read()
+    finally:
+        if (None != in_file):
+            in_file.close()
+            in_file = None
+    return file_content
+
+def compile_script_content(
+    script_content
+    ,script_file_name
+    ):
+    default_script_source_name = '<string>'
+    script_compile_mode = 'exec'
+    script_compiled_code = None
+    script_source_name = default_script_source_name
+    if (None != script_file_name):
+        script_source_name = script_file_name
+    if (None != script_content):
+        script_compiled_code = compile(
+            script_content
+            ,script_source_name
+            ,script_compile_mode
+        )
+    return script_compiled_code
+
+# Notice this is the exact same code as the compile_script_content() function
+def parse_script_ast_from_string(
+    script_content
+    ,script_file_name
+    ):
+    default_script_source_name = '<string>'
+    script_compile_mode = 'exec'
+    script_compiled_code = None
+    script_source_name = default_script_source_name
+    if (None != script_file_name):
+        script_source_name = script_file_name
+    if (None != script_content):
+        script_compiled_code = ast.parse(
+            script_content
+            ,script_source_name
+            ,script_compile_mode
+        )
+    return script_compiled_code
+    
 
 if __name__ == "__main__":
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
