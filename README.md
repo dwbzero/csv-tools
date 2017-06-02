@@ -9,7 +9,7 @@ Source Code is made available under the MIT License.
 
 ### In Development
 
-(2017-05-31 (db))
+(2017-06-02 (db))
 
 Warning: alpha quality code.
 
@@ -59,6 +59,7 @@ but here is a brief description of some of the tools so that you can get an idea
     which includes the delimiter, the newline encodings, and the character set encodings.
     This tool is used as a baseline for the other tools, 
     so most of the other tools are derived from the code from this one.
+* `csv-append` : Combines CSV files by matching row data to column names.
 * `csv-columns` : Transposes a CSV file.
     In the default case, it prints the first row of an input CSV file,
     one line of output per column from the input.
@@ -66,6 +67,7 @@ but here is a brief description of some of the tools so that you can get an idea
     on separate lines in the default case.
     In more extended cases, it prints the data across rather than down,
     which can be useful for reading CSV data in a terminal.
+* `csv-count` : Count rows, columns, cells in a CSV file.
 * `csv-distinct` : Finds distict values in a column of a CSV file.
 * `csv-filter` : Very simplistic row filter
 * `csv-join` : Joins records from an input CSV to records in a base CSV file.

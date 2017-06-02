@@ -4,23 +4,22 @@
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
 help_text = (
-    "CSV-TRANSLATE tool version 20160916:20170531\n"
-    "Translates delimited text encodings\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
+    "CSV-COUNT tool version 20170602\n"
+    "Counts CSV rows and cells\n"
+    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
-    "csv-translate [OPTIONS] [InputFile]\n"
+    "csv-count [OPTIONS] [InputFile]\n"
     "\n"
     "OPTIONS\n"
     "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -K {N}  Number of rows to skip from the input (default=0)\n"
-    "    -N {N}  Maximum number of rows to read (default=ALL)\n"
-    "    -n {N}  Maximum number of rows to write (default=ALL)\n"
-    "    -o {F}  Output file name\n"
     "    -S {S}  Input file field delimiter (default ',')\n"
-    "    -s {S}  Output file field delimiter (default ',')\n"
     "    -W {S}  Input line terminator (default '\\r\\n')\n"
-    "    -w {S}  Output line terminator (default '\\r\\n')\n"
+    "    --header   print a header row containing counter names\n"
+    "    --cells    print cell count\n"
+    "    --columns  print column count (of first row only)\n"
+    "    --rows     print row count (includes header row)\n"
+    "\n"
+    "By default, prints rows, columns, cells, and file name as a CSV row.\n"
 )
 
 import sys
@@ -49,6 +48,11 @@ def main(arg_list, stdin, stdout, stderr):
     input_row_start_offset = 0
     input_row_count_max = None
     output_row_count_max = None
+    should_print_header_row = False
+    should_print_custom_count = False
+    should_print_row_count = None
+    should_print_cell_count = None
+    should_print_column_count = None
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -140,35 +144,22 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
-        elif (arg == "-K"
-            or arg == "--row-offset-in"
-            or arg == "--offset"
-            or arg == "--skip"
+        elif (arg == "--header"
+            or arg == "--header-out"
         ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                input_row_start_offset = int(arg)
-        elif (arg == "-N"
-            or arg == "--row-count-in"
+            should_print_header_row = True
+        elif (arg == "--rows"
         ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    input_row_count_max = None
-                else:
-                    input_row_count_max = int(arg)
-        elif (arg == "-n"
-            or arg == "--row-count-out"
+            should_print_custom_count = True
+            should_print_row_count = True
+        elif (arg == "--columns"
         ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    output_row_count_max = None
-                else:
-                    output_row_count_max = int(arg)
+            should_print_custom_count = True
+            should_print_column_count = True
+        elif (arg == "--cells"
+        ):
+            should_print_custom_count = True
+            should_print_cell_count = True
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -179,6 +170,18 @@ def main(arg_list, stdin, stdout, stderr):
     if (show_help):
         out_io.write(help_text)
     else:
+        if (True == should_print_custom_count):
+            if (None == should_print_row_count):
+                should_print_row_count = False
+            if (None == should_print_column_count):
+                should_print_column_count = False
+            if (None == should_print_cell_count):
+                should_print_cell_count = False
+        else:
+            should_print_row_count = True
+            should_print_column_count = True
+            should_print_cell_count = True
+
         input_charset_name = decode_charset_name(input_charset_name)
         output_charset_name = decode_charset_name(output_charset_name)
         input_row_terminator = decode_newline(input_row_terminator)
@@ -192,38 +195,38 @@ def main(arg_list, stdin, stdout, stderr):
             #in_newline_mode = ''  # don't translate newline chars
             in_newline_mode = input_row_terminator
             in_file_id = input_file_name
-            should_close_in_file = True
+            in_close_file = True
             if (None == in_file_id):
                 in_file_id = in_io.fileno()
-                should_close_in_file = False
+                in_close_file = False
             in_io = io.open(
                  in_file_id
                 ,mode=read_text_io_mode
                 ,encoding=input_charset_name
                 ,newline=in_newline_mode
                 ,errors=input_charset_error_mode
-                ,closefd=should_close_in_file
+                ,closefd=in_close_file
                 )
-            if (should_close_in_file):
+            if (in_close_file):
                 in_file = in_io
 
             write_text_io_mode = 'wt'
             out_newline_mode=''  # don't translate newline chars
             #out_newline_mode = output_row_terminator
             out_file_id = output_file_name
-            should_close_out_file = True
+            out_close_file = True
             if (None == out_file_id):
                 out_file_id = out_io.fileno()
-                should_close_out_file = False
+                out_close_file = False
             out_io = io.open(
                  out_file_id
                 ,mode=write_text_io_mode
                 ,encoding=output_charset_name
                 ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
-                ,closefd=should_close_out_file
+                ,closefd=out_close_file
                 )
-            if (should_close_out_file):
+            if (out_close_file):
                 out_file = out_io
 
             in_csv = csv.reader(
@@ -239,64 +242,66 @@ def main(arg_list, stdin, stdout, stderr):
             execute(
                 in_csv
                 ,out_csv
-                ,input_row_terminator
-                ,output_row_terminator
-                ,input_row_start_offset
-                ,input_row_count_max
-                ,output_row_count_max
+                ,input_file_name
+                ,should_print_header_row
+                ,should_print_row_count
+                ,should_print_column_count
+                ,should_print_cell_count
                 )
         except BrokenPipeError:
             pass
         finally:
             if (None != in_file):
                 in_file.close()
-                in_file = None
             if (None != out_file):
                 out_file.close()
-                out_file = None
 
 def execute(
     in_csv
     ,out_csv
-    ,input_row_terminator
-    ,output_row_terminator
-    ,in_row_offset_start
-    ,in_row_count_max
-    ,out_row_count_max
+    ,in_file_name
+    ,should_print_header_row
+    ,should_print_row_count
+    ,should_print_column_count
+    ,should_print_cell_count
 ):
     end_row = None
-    cr_newline = '\r'
-    lf_newline = '\n'
-    crlf_newline = '\r\n'
-    out_newline = output_row_terminator
     
+    in_column_count = 0
+    in_cell_count = 0
     in_row_count = 0
-    out_row_count = 0
     in_row = next(in_csv, end_row)
-    while (end_row != in_row
-        and (None == in_row_count_max or in_row_count < in_row_count_max)
-        and (None == out_row_count_max or out_row_count < out_row_count_max)
-    ):
+    if (end_row != in_row):
+        in_column_count = len(in_row)
+        in_cell_count += len(in_row)
         in_row_count += 1
-        if (in_row_offset_start < in_row_count):
-            out_row = list(in_row)
-            column_count = len(out_row)
-            column_position = 0
-            while (column_position < column_count):
-                cell_value = out_row[column_position]
-                # fix newline characters in the data
-                # (some tools - like postgres - can't handle mixed newline chars)
-                if (None != cell_value):
-                    # replace crlf with lf, then we will replace lf's with the output newline,
-                    #  this prevents us from turning a crlf into a double newline
-                    cell_value = cell_value.replace(crlf_newline, lf_newline)
-                    cell_value = cell_value.replace(cr_newline, lf_newline)
-                    cell_value = cell_value.replace(lf_newline, out_newline)
-                    out_row[column_position] = cell_value
-                column_position += 1
-            out_csv.writerow(out_row)
-            out_row_count += 1
         in_row = next(in_csv, end_row)
+    if (should_print_row_count 
+        or should_print_cell_count
+    ):
+        while (end_row != in_row):
+            in_cell_count += len(in_row)
+            in_row_count += 1
+            in_row = next(in_csv, end_row)
+    
+    out_header_row = []
+    out_row = []
+    if (should_print_row_count):
+        out_header_row.append("rows")
+        out_row.append(str(in_row_count))
+    if (should_print_column_count):
+        out_header_row.append("columns")
+        out_row.append(str(in_column_count))
+    if (should_print_cell_count):
+        out_header_row.append("cells")
+        out_row.append(str(in_cell_count))
+    if (None != in_file_name):
+        out_header_row.append("file_name")
+        out_row.append(in_file_name)
+
+    if (should_print_header_row):
+        out_csv.writerow(out_header_row)
+    out_csv.writerow(out_row)
 
 if __name__ == "__main__":
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)

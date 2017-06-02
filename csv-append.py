@@ -4,23 +4,23 @@
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
 help_text = (
-    "CSV-TRANSLATE tool version 20160916:20170531\n"
-    "Translates delimited text encodings\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
+    "CSV-APPEND tool version 20170602\n"
+    "Appends a CSV file to a CSV stream with matching columns.\n"
+    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
-    "csv-translate [OPTIONS] [InputFile]\n"
+    "csv-append [OPTIONS] AppendFile1\n"
+    "csv-append [OPTIONS] InputFile AppendFile1 [AppendFile2...]\n"
     "\n"
     "OPTIONS\n"
-    "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -K {N}  Number of rows to skip from the input (default=0)\n"
-    "    -N {N}  Maximum number of rows to read (default=ALL)\n"
-    "    -n {N}  Maximum number of rows to write (default=ALL)\n"
     "    -o {F}  Output file name\n"
-    "    -S {S}  Input file field delimiter (default ',')\n"
-    "    -s {S}  Output file field delimiter (default ',')\n"
-    "    -W {S}  Input line terminator (default '\\r\\n')\n"
-    "    -w {S}  Output line terminator (default '\\r\\n')\n"
+    "\n"
+    "Appends the non-header rows of one or more CSV files to the end\n"
+    "of a CSV input stream, cells in the append files are matched to the\n"
+    "appropriate column of the input stream by matching column names.\n"
+    "\n"
+    "If more than one file name is specified, then the CSV input stream will\n"
+    "be read from the first file, otherwise it will be read from STDIN.\n"
+    "If the first file is named '-', then it will be read from STDIN anyway.\n"
 )
 
 import sys
@@ -33,8 +33,10 @@ def main(arg_list, stdin, stdout, stderr):
     in_io = stdin
     out_io = stdout
     err_io = stderr
+    stdio_file_name = '-'
     show_help = False
     input_file_name = None
+    input_file_name_list = []
     output_file_name = None
     input_delimiter = ','
     output_delimiter = ','
@@ -140,45 +142,27 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
-        elif (arg == "-K"
-            or arg == "--row-offset-in"
-            or arg == "--offset"
-            or arg == "--skip"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                input_row_start_offset = int(arg)
-        elif (arg == "-N"
-            or arg == "--row-count-in"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    input_row_count_max = None
-                else:
-                    input_row_count_max = int(arg)
-        elif (arg == "-n"
-            or arg == "--row-count-out"
-        ):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    output_row_count_max = None
-                else:
-                    output_row_count_max = int(arg)
         elif (None != arg
           and 0 < len(arg)
           ):
-            if (None == input_file_name):
-                input_file_name = arg
+            input_file_name_list.append(arg)
         arg_index += 1
+    
+    if (0 >= len(input_file_name_list)):
+        show_help = True
 
     if (show_help):
         out_io.write(help_text)
     else:
+        # if only one input file is provided, then use STDIN,
+        # if multiple input files are specified, then the main file will be the first one.
+        # if the name of the first file is '-' then read the main file from STDIN
+        if (1 < len(input_file_name_list)):
+            file_name = input_file_name_list[0]
+            if (stdio_file_name != file_name):
+                input_file_name = file_name
+            del input_file_name_list[0]
+
         input_charset_name = decode_charset_name(input_charset_name)
         output_charset_name = decode_charset_name(output_charset_name)
         input_row_terminator = decode_newline(input_row_terminator)
@@ -186,44 +170,45 @@ def main(arg_list, stdin, stdout, stderr):
         input_delimiter = decode_delimiter_name(input_delimiter)
         output_delimiter = decode_delimiter_name(output_delimiter) 
         in_file = None
+        in_append_file = None
         out_file = None
         try:
             read_text_io_mode = 'rt'
             #in_newline_mode = ''  # don't translate newline chars
             in_newline_mode = input_row_terminator
             in_file_id = input_file_name
-            should_close_in_file = True
+            in_close_file = True
             if (None == in_file_id):
                 in_file_id = in_io.fileno()
-                should_close_in_file = False
+                in_close_file = False
             in_io = io.open(
                  in_file_id
                 ,mode=read_text_io_mode
                 ,encoding=input_charset_name
                 ,newline=in_newline_mode
                 ,errors=input_charset_error_mode
-                ,closefd=should_close_in_file
+                ,closefd=in_close_file
                 )
-            if (should_close_in_file):
+            if (in_close_file):
                 in_file = in_io
 
             write_text_io_mode = 'wt'
             out_newline_mode=''  # don't translate newline chars
             #out_newline_mode = output_row_terminator
             out_file_id = output_file_name
-            should_close_out_file = True
+            out_close_file = True
             if (None == out_file_id):
                 out_file_id = out_io.fileno()
-                should_close_out_file = False
+                out_close_file = False
             out_io = io.open(
                  out_file_id
                 ,mode=write_text_io_mode
                 ,encoding=output_charset_name
                 ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
-                ,closefd=should_close_out_file
+                ,closefd=out_close_file
                 )
-            if (should_close_out_file):
+            if (out_close_file):
                 out_file = out_io
 
             in_csv = csv.reader(
@@ -236,67 +221,121 @@ def main(arg_list, stdin, stdout, stderr):
                 ,delimiter=output_delimiter
                 ,lineterminator=output_row_terminator
                 )
+
+            open_csv_input_file = lambda file_name: io.open(
+                 file_name
+                ,mode=read_text_io_mode
+                ,encoding=input_charset_name
+                ,newline=in_newline_mode
+                ,errors=input_charset_error_mode
+                )
+            create_csv_reader = lambda input_file: csv.reader(
+                input_file
+                ,delimiter=input_delimiter
+                ,lineterminator=input_row_terminator
+                )
+
             execute(
                 in_csv
                 ,out_csv
-                ,input_row_terminator
-                ,output_row_terminator
-                ,input_row_start_offset
-                ,input_row_count_max
-                ,output_row_count_max
+                ,input_file_name_list
+                ,open_csv_input_file
+                ,create_csv_reader
                 )
         except BrokenPipeError:
             pass
         finally:
             if (None != in_file):
                 in_file.close()
-                in_file = None
             if (None != out_file):
                 out_file.close()
-                out_file = None
 
 def execute(
     in_csv
     ,out_csv
-    ,input_row_terminator
-    ,output_row_terminator
-    ,in_row_offset_start
-    ,in_row_count_max
-    ,out_row_count_max
+    ,in_append_file_name_list
+    ,open_csv_input_file
+    ,create_csv_reader
 ):
     end_row = None
-    cr_newline = '\r'
-    lf_newline = '\n'
-    crlf_newline = '\r\n'
-    out_newline = output_row_terminator
-    
     in_row_count = 0
     out_row_count = 0
-    in_row = next(in_csv, end_row)
-    while (end_row != in_row
-        and (None == in_row_count_max or in_row_count < in_row_count_max)
-        and (None == out_row_count_max or out_row_count < out_row_count_max)
-    ):
-        in_row_count += 1
-        if (in_row_offset_start < in_row_count):
-            out_row = list(in_row)
-            column_count = len(out_row)
-            column_position = 0
-            while (column_position < column_count):
-                cell_value = out_row[column_position]
-                # fix newline characters in the data
-                # (some tools - like postgres - can't handle mixed newline chars)
-                if (None != cell_value):
-                    # replace crlf with lf, then we will replace lf's with the output newline,
-                    #  this prevents us from turning a crlf into a double newline
-                    cell_value = cell_value.replace(crlf_newline, lf_newline)
-                    cell_value = cell_value.replace(cr_newline, lf_newline)
-                    cell_value = cell_value.replace(lf_newline, out_newline)
-                    out_row[column_position] = cell_value
-                column_position += 1
-            out_csv.writerow(out_row)
-            out_row_count += 1
+    out_column_name_list = []
+    
+
+    # copy all input rows from the main stream directly to the output stream
+    in_header_row = next(in_csv, end_row)
+    if (end_row != in_header_row):
+        out_header_row = list(in_header_row)
+        out_column_name_list = out_header_row
+        out_csv.writerow(out_header_row)
         in_row = next(in_csv, end_row)
+    while (end_row != in_row):
+        in_row_count += 1
+        out_row = in_row
+        out_csv.writerow(out_row)
+        out_row_count += 1
+        in_row = next(in_csv, end_row)
+
+    for in_append_file_name in in_append_file_name_list:
+        in_append_file = None
+        try:
+            in_append_file = open_csv_input_file(in_append_file_name)
+            in_append_csv = create_csv_reader(in_append_file)
+            # read header row of append file, 
+            # find the column offsets for columns that match the output header row
+            out_append_column_position_list = []
+            in_header_row = next(in_append_csv, end_row)
+            if (end_row != in_header_row):
+                out_column_position = 0
+                while (out_column_position < len(out_column_name_list)):
+                    out_column_name = out_column_name_list[out_column_position]
+                    out_column_name_norm = normalize_column_name(out_column_name)
+                    found_in_column_position = -1
+                    in_column_position = 0
+                    while (0 > found_in_column_position
+                        and in_column_position < len(in_header_row)
+                    ):
+                        in_column_name = in_header_row[in_column_position]
+                        in_column_name_norm = normalize_column_name(in_column_name)
+                        if (None != in_column_name_norm
+                            and in_column_name_norm == out_column_name_norm
+                        ):
+                            found_in_column_position = in_column_position
+                        in_column_position += 1
+                    out_append_column_position_list.append(found_in_column_position)
+                    out_column_position += 1
+            # append the rows after the header
+            in_row = end_row
+            if (end_row != in_header_row):
+                in_row = next(in_append_csv, end_row)
+            while (in_row != end_row):
+                in_row_count += 1
+                out_row = []
+                for in_column_position in out_append_column_position_list:
+                    out_cell_value = None
+                    if (0 <= in_column_position
+                        and in_column_position < len(in_row)
+                    ):
+                        out_cell_value = in_row[in_column_position]
+                    out_row.append(out_cell_value)
+                out_csv.writerow(out_row)
+                out_row_count += 1
+                in_row = next(in_append_csv, end_row)
+        except BrokenPipeError:
+            pass
+        finally:
+            if (None != in_append_file):
+                in_append_file.close()
+                in_append_file = None
+
+    
+def normalize_column_name(in_column_name):
+    out_column_name = in_column_name
+    if (None != out_column_name):
+        out_column_name = out_column_name.strip()
+        out_column_name = out_column_name.lower()
+    return out_column_name
 
 if __name__ == "__main__":
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
