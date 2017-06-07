@@ -1,7 +1,7 @@
 ##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
 
 help_text = (
-    "CSV-PRINT tool version 20170220:20170518\n"
+    "CSV-PRINT tool version 20170220:20170605\n"
     "Prints a fixed-width representation of a CSV file\n"
     "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
@@ -9,6 +9,7 @@ help_text = (
     "\n"
     "OPTIONS\n"
     "    -H      Don't skip the header row when analyzing column width\n"
+    "    -K {N}  Number of input rows to skip (not including header)\n"
     "    -N {N}  Number of input rows to analyze for column widths (default=1)\n"
     "    -n {N}  Number of rows to print (default=all)\n"
     "    -o {F}  Output file name\n"
@@ -39,6 +40,7 @@ def main(arg_list, stdin, stdout, stderr):
     input_charset_name = 'utf_8_sig'
     output_charset_name = 'utf_8'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    input_row_start_offset = 0
     column_name_list_string = None
     column_width_list_string = None
     analyze_row_count_string = None
@@ -123,6 +125,15 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
+        elif (arg == "-K"
+            or arg == "--row-offset-in"
+            or arg == "--offset"
+            or arg == "--skip"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_row_start_offset = int(arg)
         elif (arg == "-N"
           or arg == "--analyze-row-count"
           ):
@@ -254,6 +265,7 @@ def main(arg_list, stdin, stdout, stderr):
                 ,truncation_symbol
                 ,column_name_list
                 ,column_width_list
+                ,input_row_start_offset
                 ,analyze_row_count
                 ,out_row_count_max
                 ,column_width_min
@@ -276,6 +288,7 @@ def execute(
     ,truncation_symbol
     ,column_name_list
     ,column_width_fixed_list
+    ,skip_row_count
     ,analyze_row_count
     ,out_row_count_max
     ,column_width_min
@@ -283,6 +296,7 @@ def execute(
     ,should_analyze_header_row
 ):
     end_row = None
+    newline = '\n'
     in_header_row = next(in_csv, end_row)
     out_header_row = None
     if (end_row != in_header_row):
@@ -314,6 +328,15 @@ def execute(
             out_header_row.append(out_column_name)
             out_column_position += 1
 
+        # skip rows if necessary
+        in_row_count = 0
+        in_row = in_header_row
+        while (in_row_count < skip_row_count
+            and end_row != in_row
+        ):
+            in_row_count += 1
+            in_row = next(in_csv, end_row)
+
         # figure out the row widths
         column_width_list = []
         row_count = 0
@@ -337,7 +360,14 @@ def execute(
                 in_column_position = 0
                 while (in_column_position < len(in_row)):
                     cell_value = in_row[in_column_position]
-                    cell_width = len(cell_value)
+                    cell_width = 0
+                    if (None != cell_value):
+                        # we need to check for newlines, the cell_width is the longest line
+                        cell_value = normalize_newlines(cell_value)
+                        cell_line_list = cell_value.split(newline)
+                        cell_line_length_list = map(len, cell_line_list)
+                        cell_width = max(cell_line_length_list)
+                        #cell_width = len(cell_value)
                     if (in_column_position == len(column_width_list)):
                         column_width_list.append(column_width_min)
                     column_width = column_width_list[in_column_position]
@@ -375,6 +405,8 @@ def execute(
         while (end_row != in_row
             and (None == out_row_count_max or row_count < out_row_count_max)
             ):
+            has_wrapped_cell = False
+            wrap_row = []
             out_row = []
             out_column_position = 0
             while (out_column_position < len(column_position_map)):
@@ -394,6 +426,11 @@ def execute(
                 out_cell_value = cell_value
                 if (None == out_cell_value):
                     out_cell_value = ""
+                out_cell_value = normalize_newlines(out_cell_value)
+                (out_cell_value, wrap_cell_value) = split_head_str(out_cell_value, newline)
+                wrap_row.append(wrap_cell_value)
+                if (None != wrap_cell_value):
+                    has_wrapped_cell = True
                 if (column_width < len(out_cell_value)):
                     if (0 < column_width):
                         if (None == truncation_symbol):
@@ -411,12 +448,40 @@ def execute(
                 out_column_position += 1
             out_line = output_delimiter.join(out_row) + output_row_terminator
             out_io.write(out_line)
-            row_count += 1
-            if (row_list_position < len(in_row_list)):
+            # if some cell values have newlines in them,
+            #  then we must write another wrapped line of text
+            #  this does not count as a "row" of output
+            if (has_wrapped_cell):
+                in_row = wrap_row
+            elif (row_list_position < len(in_row_list)):
+                row_count += 1
                 in_row = in_row_list[row_list_position]
                 row_list_position += 1
             else:
+                row_count += 1
                 in_row = next(in_csv, end_row)
+
+# ensure all newline symbols are normalized to be line-feed only
+def normalize_newlines(in_str):
+    out_str = in_str
+    if (None != out_str):
+        out_str = out_str.replace('\r\n', '\n').replace('\r', '\n')
+    return out_str
+
+# split a string at the first separator found
+#  and return a pair/tuple of the head and the tail
+def split_head_str(in_str, sep):
+    head_str = None
+    tail_str = None
+    if (None != in_str and None != sep):
+        pos = in_str.find(sep)
+        if (0 > pos):
+            head_str = in_str
+        else:
+            head_str = in_str[0:pos]
+            tail_str = in_str[pos+len(sep):]
+    return (head_str, tail_str)
+
 
 if __name__ == "__main__":
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)

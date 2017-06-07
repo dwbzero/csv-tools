@@ -35,6 +35,8 @@ def main(arg_list, stdin, stdout, stderr):
     output_row_terminator = 'std'
     input_charset_name = 'utf_8_sig'
     output_charset_name = 'utf_8'
+    output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
     in_source_column_name_list_string = None
     in_counter_column_name = None
@@ -78,6 +80,25 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_charset_name = arg
+        elif (arg == "--charset-in-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_charset_error_mode = arg
+        elif (arg == "--charset-out-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                output_charset_error_mode = arg
+        elif (arg == "--charset-error-mode"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_charset_error_mode = arg
+                output_charset_error_mode = arg
         elif (arg == "-S"
           or arg == "--separator-in"
           or arg == "--delimiter-in"
@@ -150,19 +171,54 @@ def main(arg_list, stdin, stdout, stderr):
         in_file = None
         out_file = None
         try:
-            if (None != input_file_name):
-                read_text_io_mode = 'rt'
-                #in_newline_mode = ''  # don't translate newline chars
-                in_newline_mode = input_row_terminator
-                in_file = io.open(input_file_name, mode=read_text_io_mode, encoding=input_charset_name, newline=in_newline_mode)
-                in_io = in_file
-            if (None != output_file_name):
-                write_text_io_mode = 'wt'
-                out_newline_mode=''  # don't translate newline chars
-                out_file = io.open(output_file_name, mode=write_text_io_mode, encoding=output_charset_name, newline=out_newline_mode)
-                out_io = out_file
-            in_csv = csv.reader(in_io, delimiter=input_delimiter, lineterminator=input_row_terminator)
-            out_csv = csv.writer(out_io, delimiter=output_delimiter, lineterminator=output_row_terminator)
+            read_text_io_mode = 'rt'
+            #in_newline_mode = ''  # don't translate newline chars
+            in_newline_mode = input_row_terminator
+            in_file_id = input_file_name
+            should_close_in_file = True
+            if (None == in_file_id):
+                in_file_id = in_io.fileno()
+                should_close_in_file = False
+            in_io = io.open(
+                 in_file_id
+                ,mode=read_text_io_mode
+                ,encoding=input_charset_name
+                ,newline=in_newline_mode
+                ,errors=input_charset_error_mode
+                ,closefd=should_close_in_file
+                )
+            if (should_close_in_file):
+                in_file = in_io
+
+            write_text_io_mode = 'wt'
+            out_newline_mode=''  # don't translate newline chars
+            #out_newline_mode = output_row_terminator
+            out_file_id = output_file_name
+            should_close_out_file = True
+            if (None == out_file_id):
+                out_file_id = out_io.fileno()
+                should_close_out_file = False
+            out_io = io.open(
+                 out_file_id
+                ,mode=write_text_io_mode
+                ,encoding=output_charset_name
+                ,newline=out_newline_mode
+                ,errors=output_charset_error_mode
+                ,closefd=should_close_out_file
+                )
+            if (should_close_out_file):
+                out_file = out_io
+
+            in_csv = csv.reader(
+                in_io
+                ,delimiter=input_delimiter
+                ,lineterminator=input_row_terminator
+                )
+            out_csv = csv.writer(
+                out_io
+                ,delimiter=output_delimiter
+                ,lineterminator=output_row_terminator
+                )
             try:
                 execute(
                   in_csv, 
