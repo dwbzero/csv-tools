@@ -70,12 +70,15 @@ but here is a brief description of some of the tools so that you can get an idea
 * `csv-count` : Count rows, columns, cells in a CSV file.
 * `csv-distinct` : Finds distict values in a column of a CSV file.
 * `csv-filter` : Very simplistic row filter
+* `csv-headmerge` : Merge multiple header rows into one row.
 * `csv-join` : Joins records from an input CSV to records in a base CSV file.
 * `csv-json` : Does a simplistic conversion of JSON to CSV.
+* `csv-prepend` : Insert a header row to a CSV stream.
 * `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
 * `csv-rowcalc` : Runs a python script for each row in a CSV file.
     Can be used as a "field calculator".
 * `csv-rownum` : Prepends a row number column to a CSV file.
 * `csv-select` : Selects a subset of columns from a CSV file.
+* `csv-tail` : Filters the tail rows from a CSV file.
 
       
