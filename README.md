@@ -54,31 +54,33 @@ Most tools assume that the CSV file has a header row.
 You can expect this document to be out-of-date, 
 but here is a brief description of some of the tools so that you can get an idea of the flavor of this library.
 
-* `csv-translate` : This is the "template" tool.  It hardly does anything.
+* `csv-translate` : This is the "prototype" script.  It hardly does anything.
     It's function is to translate the formatting of delimited text files,
     which includes the delimiter, the newline encodings, and the character set encodings.
     This tool is used as a baseline for the other tools, 
     so most of the other tools are derived from the code from this one.
 * `csv-append` : Combines CSV files by matching row data to column names.
-* `csv-columns` : Transposes a CSV file.
-    In the default case, it prints the first row of an input CSV file,
+* `csv-col2row` : Transpose part of a CSV stream moving some columns into rows.
+* `csv-columns` : Transposes a CSV stream.
+    In the default case, it prints the first row of an input CSV stream,
     one line of output per column from the input.
     This has the effect of printing the column header names
     on separate lines in the default case.
     In more extended cases, it prints the data across rather than down,
     which can be useful for reading CSV data in a terminal.
-* `csv-count` : Count rows, columns, cells in a CSV file.
-* `csv-distinct` : Finds distict values in a column of a CSV file.
-* `csv-filter` : Very simplistic row filter
+* `csv-count` : Count rows, columns, cells in a CSV stream.
+* `csv-distinct` : Finds distict values in a column of a CSV stream.
+* `csv-filter` : Very simplistic row filter for a CSV stream
 * `csv-headmerge` : Merge multiple header rows into one row.
-* `csv-join` : Joins records from an input CSV to records in a base CSV file.
+* `csv-join` : Joins records from an input CSV stream to records in a base CSV file.
 * `csv-json` : Does a simplistic conversion of JSON to CSV.
 * `csv-prepend` : Insert a header row to a CSV stream.
 * `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
-* `csv-rowcalc` : Runs a python script for each row in a CSV file.
+* `csv-rowcalc` : Runs a python script for each row in a CSV stream.
     Can be used as a "field calculator".
-* `csv-rownum` : Prepends a row number column to a CSV file.
-* `csv-select` : Selects a subset of columns from a CSV file.
-* `csv-tail` : Filters the tail rows from a CSV file.
+* `csv-rownum` : Prepends a row number column to a CSV stream.
+* `csv-select` : Selects a subset of columns from a CSV stream.
+* `csv-sort` : Sort rows in a CSV stream.
+* `csv-tail` : Filters the tail rows from a CSV stream.
 
       
