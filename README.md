@@ -60,7 +60,7 @@ but here is a brief description of some of the tools so that you can get an idea
     This tool is used as a baseline for the other tools, 
     so most of the other tools are derived from the code from this one.
 * `csv-append` : Combines CSV files by matching row data to column names.
-* `csv-col2row` : Transpose part of a CSV stream moving some columns into rows.
+* `csv-col2row` : Transpose a subset of named columns into rows.
 * `csv-columns` : Transposes a CSV stream.
     In the default case, it prints the first row of an input CSV stream,
     one line of output per column from the input.
@@ -76,6 +76,7 @@ but here is a brief description of some of the tools so that you can get an idea
 * `csv-json` : Does a simplistic conversion of JSON to CSV.
 * `csv-prepend` : Insert a header row to a CSV stream.
 * `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
+* `csv-row2col` : Transposes "named rows" into columns
 * `csv-rowcalc` : Runs a python script for each row in a CSV stream.
     Can be used as a "field calculator".
 * `csv-rownum` : Prepends a row number column to a CSV stream.

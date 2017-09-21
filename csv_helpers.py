@@ -64,3 +64,10 @@ def decode_newline(in_newline_name):
         ):
             out_newline = "\r\n"
     return out_newline
+
+def normalize_column_name(column_name):
+    norm_column_name = column_name
+    if (None != norm_column_name):
+        norm_column_name = norm_column_name.strip()
+        norm_column_name = norm_column_name.lower()
+    return norm_column_name

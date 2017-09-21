@@ -61,42 +61,42 @@ def main(arg_list, stdin, stdout, stderr):
         elif (arg == "-o"
           or arg == "--output"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 output_file_name = arg
         elif (arg == "-E"
           or arg == "--charset-in"
           or arg == "--encoding-in"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_charset_name = arg
         elif (arg == "-e"
           or arg == "--charset-out"
           or arg == "--encoding-out"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 output_charset_name = arg
         elif (arg == "--charset-in-error-mode"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_charset_error_mode = arg
         elif (arg == "--charset-out-error-mode"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 output_charset_error_mode = arg
         elif (arg == "--charset-error-mode"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_charset_error_mode = arg
                 output_charset_error_mode = arg
@@ -104,16 +104,16 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--separator-in"
           or arg == "--delimiter-in"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_delimiter = arg
         elif (arg == "-s"
           or arg == "--separator-out"
           or arg == "--delimiter-out"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 output_delimiter = arg
         elif (arg == "-W"
@@ -121,8 +121,8 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--newline-in"
           or arg == "--endline-in"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_row_terminator = arg
         elif (arg == "-w"
@@ -130,14 +130,14 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--newline-out"
           or arg == "--endline-out"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 output_row_terminator = arg
         elif (arg == "--cell-width-limit"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
         elif (arg == "-K"
@@ -145,15 +145,15 @@ def main(arg_list, stdin, stdout, stderr):
             or arg == "--offset"
             or arg == "--skip"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 input_row_start_offset = int(arg)
         elif (arg == "-N"
             or arg == "--row-count-in"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 if ('ALL' == arg.upper()):
                     input_row_count_max = None
@@ -162,8 +162,8 @@ def main(arg_list, stdin, stdout, stderr):
         elif (arg == "-n"
             or arg == "--row-count-out"
         ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 if ('ALL' == arg.upper()):
                     output_row_count_max = None
