@@ -1,4 +1,5 @@
 ##  Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 ## #python-3.x
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
@@ -27,7 +28,11 @@ import sys
 import csv
 import io
 
-from csv_helpers import decode_delimiter_name, decode_charset_name, decode_newline
+from ._csv_helpers import (
+    decode_delimiter_name
+    ,decode_charset_name
+    ,decode_newline
+    )
 
 def main(arg_list, stdin, stdout, stderr):
     in_io = stdin
@@ -337,5 +342,10 @@ def normalize_column_name(in_column_name):
         out_column_name = out_column_name.lower()
     return out_column_name
 
-if __name__ == "__main__":
+
+def console_main():
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
+
+        
+if __name__ == "__main__":
+    console_main()

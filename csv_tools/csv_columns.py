@@ -1,4 +1,5 @@
 ##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
     "CSV-COLUMNS tool version 20160919:20170215\n"
@@ -21,7 +22,11 @@ import sys
 import csv
 import io
 
-from csv_helpers import decode_delimiter_name, decode_charset_name, decode_newline
+from ._csv_helpers import (
+    decode_delimiter_name
+    ,decode_charset_name
+    ,decode_newline
+    )
 
 def main(arg_list, stdin, stdout, stderr):
     in_io = stdin
@@ -281,5 +286,10 @@ def execute(in_csv, out_csv, input_delimiter, output_delimiter, in_row_offset_st
         in_column_count += 1
 
 
-if __name__ == "__main__":
+
+def console_main():
     main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
+
+        
+if __name__ == "__main__":
+    console_main()

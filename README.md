@@ -2,7 +2,7 @@
 
 Light-weight python scripts for processing CSV files from commandline.
 
-Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.
+Copyright (c) 2016-2018 Upstream Research, Inc.  All Rights Reserved.
 
 Source Code is made available under the MIT License.
 
@@ -16,8 +16,6 @@ Warning: alpha quality code.
 These scripts are written as relatively independent commandline tools,
 with few external dependencies (other than Python) and are
 intended for processing CSV (Comma-Separated-Value) files that may be very large.
-They have been developed to accomplish immediate tasks
-and have not yet been refined into a more friendly, distributable package.
 
 Development and usage has been with Python 3.5 on Windows.
 Some attempt has been made to keep compatibility with non-Windows environments
