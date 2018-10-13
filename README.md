@@ -9,7 +9,7 @@ Source Code is made available under an MIT License.
 
 Revised 2018-10-13 (db)
 
-### In Development
+### Overview
 
 This project consists of a set of separate commandline programs for manipulating CSV data.
 These programs are implemented in Python and are intended to be copied and modified
@@ -205,7 +205,7 @@ and `-n 20` means "stop printing after 20 rows".
     Alabama Conecuh County  0         0         0         0
     Alabama Coosa County    0         0         0         0
 
-It turns out that Alabama is not as interesting as some other US States,
+It turns out that for Lyme disease, Alabama is not as interesting as some other US States,
 we can use the `csv-filter` command to select a different state.
 But first, we have to handle a problem:
 
