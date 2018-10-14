@@ -225,14 +225,18 @@ But first, we have to handle a problem:
     New Hampshire Carroll County 2         4         35        12
 
 This is a complicated way of saying that the CSV file is not encoded as UTF-8.
-We can try to read the file using a different charset.
+We can try to read the file using a different encoding.
 We `csv-translate` with the `-E cp437` option to interpret the input in "DOS" codepage,
 and we use the `-e utf-8` option so that our output is piped along as UTF-8.
-(If you are used to fighting with CSV files, then you are probably aware
-of text encoding issues and "codepages", so I will not describe 
-what "cp437" means here.  However, it is interesting to note
-that our problem comes from the `LATIN SMALL LETTER N WITH TILDE`
-character found in "Doña Ana" county New Mexico).
+
+_(If you are accustomed to fighting with CSV files, then you are probably aware
+of text encoding issues and "codepages".  
+In this case, our problem comes from the `LATIN SMALL LETTER N WITH TILDE` character 
+found in "Doña Ana" county New Mexico.
+The name `cp437` is a Python text encoding name,
+a list of supported text encoding names is found in the python documentation
+for the `codecs` module.)_
+
 Additionally, if we are running this in a Windows console, 
 we will need to issue a `chcp` command to change the console's code page
 so that it will know how to display the output:
@@ -240,7 +244,7 @@ so that it will know how to display the output:
     @REM if this is a Windows command prompt, change the active code page to UTF-8
     > chcp 65001
     
-    > csv-translate -E cp850 -e utf-8 ld-case-counts-by-county-00-15.csv 
+    > csv-translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
       | csv-filter STNAME = "New Hampshire" 
       | csv-select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 
       | csv-print -H -N 10 -n 20
@@ -258,10 +262,90 @@ so that it will know how to display the output:
     New Hampshire Sullivan County     0         0         22        12
     New Hampshire New Hampshire       0         0         0         13
 
-This could go on.  Other operations you might want to do could be:
+Suppose we want to plot this data using a GIS tool like `QGIS`.
+_(If you are not familiar with Geographic Information System conventions,
+then the details of this part may seem confusing.)_
+Suppose also that we have available some US county boundary data which 
+references counties by the usual 5-digit State/County "FIPS" code 
+(as one would find in the US Census TIGER datasets).
+We need to format a new column, which we will call "GEOID" (Geographic ID).
+Notice that the `STCODE` and `CTYCODE` were not fixed-width (as would be conventional),
+so we want also to fix those up.
+We can use `csv-rowcalc` to do this.
+Its job is to execute a python script for each row in the CSV input.
+First, we need a "field calculator" script.
+Open a text editor, insert the code below, and save it as `ld-case-counts-by-county.rowcalc.py`:
 
-* Use `csv-rowcalc` to pad the `STCODE` and `CTYCODE` columns with extra zeros to make them into valid "FIPS" codes.
-* Use `csv-col2row` to transpose the `CasesYYYY` columns into rows containing "Year" and "Cases" columns.
+        # file: ld-case-counts-by-county.rowcalc.py
+        state_code = row['STCODE']
+        county_code = row['CTYCODE']
 
+        if (None != state_code):
+            state_code = state_code.rjust(2,'0')
 
+        if (None != county_code):
+            county_code = county_code.rjust(3,'0')
+            
+        county_geoid = None
+        if (None != state_code and None != county_code):
+            county_geoid = state_code + county_code
 
+        row['STCODE'] = state_code
+        row['CTYCODE'] = county_code
+        row['GEOID'] = county_geoid
+
+This script will be executed for each row in the input file.
+Each time the script is executed, 
+the `row` variable will contain the cells of the current row as a python dictionary of string values.
+
+We use this script with `csv-rowcalc` and check that it does what we want.
+We will use the `-a GEOID` option to append a new column named `GEOID`
+and we will pipe it to `csv-columns` to see some of the new records.
+Also, we need to specify our input encoding, so we include 
+the `csv-translate` process as shown earlier.
+
+    > csv-translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
+    | csv-rowcalc -a GEOID ld-case-counts-by-county.rowcalc.py 
+    | csv-columns -N 3
+
+    STNAME,Alabama,Alabama
+    CTYNAME,Autauga County,Baldwin County
+    STCODE,01,01
+    CTYCODE,001,003
+    Cases2000,0,1
+    Cases2001,0,0
+    Cases2002,0,1
+    Cases2003,0,0
+    Cases2004,0,0
+    Cases2005,0,0
+    Cases2006,0,0
+    Cases2007,0,0
+    Cases2008,0,0
+    Cases2009,0,1
+    Cases2010,0,0
+    Cases2011,0,1
+    Cases2012,0,1
+    Cases2013,0,0
+    Cases2014,0,3
+    Cases2015,0,1
+    GEOID,01001,01003
+
+This is great to see, but we need to save it in order to use it with our GIS software.
+We can save it using the `-o` option.
+We name the file a little differently to clarify that it has a `GEOID` column
+and that the encoding is UTF-8.
+Also, we don't actually need to use `csv-translate` to translate the encoding
+since all of the CSV programs currently support this option
+(even if their help contents don't say so).
+Finally, the `-e` option is unnecessary since UTF-8 is the default output encoding.
+
+    > csv-rowcalc -E cp437 -a GEOID ld-case-counts-by-county.rowcalc.py ld-case-counts-by-county-00-15.csv -o ld-case-counts-by-county-geoid-00-15.utf8.csv
+
+We now have a file named `ld-case-counts-by-county-geoid-00-15.utf8.csv`
+that contains a GEOID column and that is suitable for use as a GIS attribute table.
+
+There are other operations we may want to perform on the data:
+
+  * We can use the `csv-col2row` program to transpose the `CasesYYYY` columns into rows with `YEAR` and `Cases` columns.
+  * We could join this file to another file containing county population numbers (using `csv-join`) so that we could compute some sort of incidence rate.
+  * We could remove rows from the dataset that don't actually represent counties (there are some in there...)
