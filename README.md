@@ -7,7 +7,7 @@ Copyright (c) 2016-2018 Upstream Research, Inc.  All Rights Reserved.
 
 Source Code is made available under an MIT License.
 
-Revised 2018-10-13 (db)
+Revised 2018-10-14 (db)
 
 ### Overview
 
@@ -110,7 +110,7 @@ but here is a brief description of some of the tools so that you can get an idea
 * `csv-sort` : Sort rows in a CSV stream.
 * `csv-tail` : Filters the tail rows from a CSV stream.
 
-### Example: Lyme Disease Cases from US CDC
+### Walkthrough Example: Lyme Disease Cases from US CDC
 
 Suppose you have downloaded the `ld-case-counts-by-county-00-15.csv` data file from the US CDC website.
 (It turns-out that this file is not very large, and you could view it using a Spreadsheet program,
@@ -180,6 +180,9 @@ and to "pretty-print" them using `csv-print`.
 The `csv-print` options `-H` means to print the full header names,
 `-N 10` means "analyze the first 10 rows to determine column widths",
 and `-n 20` means "stop printing after 20 rows".
+By convention, command options are uppercase if they apply to the input,
+and they are lowercase if they apply to the output.
+_(If you run into a `UnicodeDecodeError`, then keep reading...)_
 
     > csv-select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 ld-case-counts-by-county-00-15.csv 
       | csv-print -H -N 10 -n 20
@@ -269,7 +272,7 @@ Suppose also that we have available some US county boundary data which
 references counties by the usual 5-digit State/County "FIPS" code 
 (as one would find in the US Census TIGER datasets).
 We need to format a new column, which we will call "GEOID" (Geographic ID).
-Notice that the `STCODE` and `CTYCODE` were not fixed-width (as would be conventional),
+Notice also, that the `STCODE` and `CTYCODE` were not fixed-width (as would be conventional),
 so we want also to fix those up.
 We can use `csv-rowcalc` to do this.
 Its job is to execute a python script for each row in the CSV input.
@@ -297,6 +300,8 @@ Open a text editor, insert the code below, and save it as `ld-case-counts-by-cou
 This script will be executed for each row in the input file.
 Each time the script is executed, 
 the `row` variable will contain the cells of the current row as a python dictionary of string values.
+This code uses the Python string `rjust` method to pad the state and county codes with zeros,
+then it concats the padded state and county codes together to create the GEOID.
 
 We use this script with `csv-rowcalc` and check that it does what we want.
 We will use the `-a GEOID` option to append a new column named `GEOID`
@@ -330,12 +335,13 @@ the `csv-translate` process as shown earlier.
     Cases2015,0,1
     GEOID,01001,01003
 
-This is great to see, but we need to save it in order to use it with our GIS software.
+This is satisfying to see in the console, 
+but we need to save it in order to use it with our GIS software.
 We can save it using the `-o` option.
 We name the file a little differently to clarify that it has a `GEOID` column
 and that the encoding is UTF-8.
 Also, we don't actually need to use `csv-translate` to translate the encoding
-since all of the CSV programs currently support this option
+since all of the CSV programs currently support the text encoding options
 (even if their help contents don't say so).
 Finally, the `-e` option is unnecessary since UTF-8 is the default output encoding.
 
