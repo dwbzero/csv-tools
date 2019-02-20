@@ -173,7 +173,7 @@ The `-N 3` option says "read only the first 3 rows from the input".
     Cases2014,0,3
     Cases2015,0,1
 
-With this information, we migt want to make a print-out of a selection
+With this information, we might want to make a print-out of a selection
 of the data which will allow some greater scrutiny of the data.
 We will use a command process pipe to select a subset of the columns using `csv-select`
 and to "pretty-print" them using `csv-print`.
