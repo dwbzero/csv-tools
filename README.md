@@ -3,11 +3,11 @@
 Light-weight python scripts for processing CSV files from commandline.
 
 
-Copyright (c) 2016-2018 Upstream Research, Inc.  All Rights Reserved.
+Copyright (c) 2016-2019 Upstream Research, Inc.  All Rights Reserved.
 
 Source Code is made available under an MIT License.
 
-Revised 2018-10-14 (db)
+Revised 2019-05-01 (db)
 
 ### Overview
 
@@ -66,6 +66,14 @@ For example:
 
     > csv-translate --help
 
+The programs are packaged into a module to facilitate installation,
+but consequently they cannot be executed as scripts directly by the interpreter.
+They can, however, be executed as modules.
+To execute the csv-translate.py program from the interpreter without installing it,
+CD to the directory containing the csv_tools source directory and execute:
+
+    > python -m csv_tools.csv_translate --help
+
 Programs are written to work with STD I/O.  
 By default, most programs accept CSV data from STDIN and write CSV data back to STDOUT.
 Python and Windows make this a little difficult for non-ASCII character encodings and for Windows newline (CR-LF) sequences, so be careful.
@@ -102,6 +110,7 @@ but here is a brief description of some of the tools so that you can get an idea
 * `csv-json` : Does a simplistic conversion of JSON to CSV.
 * `csv-prepend` : Insert a header row to a CSV stream.
 * `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
+* `csv-rejoin` : Expand a CSV list embedded in a CSV column as a nested outer join.
 * `csv-row2col` : Transposes "named rows" into columns
 * `csv-rowcalc` : Runs a python script for each row in a CSV stream.
     Can be used as a "field calculator".
@@ -115,7 +124,8 @@ but here is a brief description of some of the tools so that you can get an idea
 Suppose you have downloaded the `ld-case-counts-by-county-00-15.csv` data file from the US CDC website.
 (It turns-out that this file is not very large, and you could view it using a Spreadsheet program,
 but this example applies to very large files that are often impractical to open.)
-It is claimed that this file contains numbers of confirmed cases of Lyme disease in various counties in the USA.
+It is reported that this file contains numbers of confirmed cases of Lyme disease 
+occurring in various counties in the USA in 2015.
 The first step is to see if there is a "header" row containing column names;
 this will reveal a lot about the data.  We use the `csv-columns` program for this:
 

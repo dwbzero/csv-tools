@@ -37,6 +37,7 @@ setup(
             ,'csv-json = csv_tools.csv_json:console_main'
             ,'csv-prepend = csv_tools.csv_prepend:console_main'
             ,'csv-print = csv_tools.csv_print:console_main'
+            ,'csv-rejoin = csv_tools.csv_rejoin:console_main'
             ,'csv-row2col = csv_tools.csv_row2col:console_main'
             ,'csv-rowcalc = csv_tools.csv_rowcalc:console_main'
             ,'csv-rownum = csv_tools.csv_rownum:console_main'

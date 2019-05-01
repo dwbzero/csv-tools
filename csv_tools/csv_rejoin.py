@@ -5,22 +5,17 @@
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
 help_text = (
-    "CSV-TRANSLATE tool version 20160916:20190501\n"
-    "Translates delimited text encodings\n"
+    "CSV-REJOIN tool version 20190501\n"
+    "Expand a CSV list embedded in a column of a CSV file like an outer join\n"
     "\n"
-    "csv-translate [OPTIONS] [InputFile]\n"
+    "csv-rejoin [OPTIONS] Column [InputFile]\n"
     "\n"
     "OPTIONS\n"
-    "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -K {N}  Number of rows to skip from the input (default=0)\n"
-    "    -N {N}  Maximum number of rows to read (default=ALL)\n"
-    "    -n {N}  Maximum number of rows to write (default=ALL)\n"
     "    -o {F}  Output file name\n"
     "    -S {S}  Input file field delimiter (default ',')\n"
     "    -s {S}  Output file field delimiter (default ',')\n"
-    "    -W {S}  Input line terminator (default '\\r\\n')\n"
-    "    -w {S}  Output line terminator (default '\\r\\n')\n"
+    "    -T {S}  Embedded list delimiter (default - same as out CSV delimiter)\n"
+    "    --trim  Trim whitespace on the inner field values\n"
 )
 
 import sys
@@ -31,6 +26,7 @@ from ._csv_helpers import (
     decode_delimiter_name
     ,decode_charset_name
     ,decode_newline
+    ,normalize_column_name
     )
 
 
@@ -56,6 +52,9 @@ def main(arg_list, stdin, stdout, stderr):
     input_row_start_offset = 0
     input_row_count_max = None
     output_row_count_max = None
+    source_column_name = None
+    input_inner_delimiter = None
+    should_trim_inner_values = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -176,15 +175,36 @@ def main(arg_list, stdin, stdout, stderr):
                     output_row_count_max = None
                 else:
                     output_row_count_max = int(arg)
+        elif (arg == "-T"
+          or arg == "--inner-separator-in"
+          or arg == "---inner-delimiter-in"
+          or arg == "--inner-separator"
+          or arg == "---inner-delimiter"
+          ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                input_inner_delimiter = arg
+        elif (arg == "--trim"):
+            should_trim_inner_values = True
         elif (None != arg
           and 0 < len(arg)
           ):
-            if (None == input_file_name):
+            if (None == source_column_name):
+                source_column_name = arg
+            elif (None == input_file_name):
                 input_file_name = arg
         arg_index += 1
 
+    if (None == source_column_name):
+        show_help = True
+        exit_code = -2
+
     if (show_help):
-        out_io.write(help_text)
+        if (0 == exit_code):
+            out_io.write(help_text)
+        else:
+            err_io.write(help_text)
     else:
         # set global CSV column width
         if (None != csv_cell_width_limit):
@@ -195,7 +215,11 @@ def main(arg_list, stdin, stdout, stderr):
         input_row_terminator = decode_newline(input_row_terminator)
         output_row_terminator = decode_newline(output_row_terminator)
         input_delimiter = decode_delimiter_name(input_delimiter)
-        output_delimiter = decode_delimiter_name(output_delimiter) 
+        output_delimiter = decode_delimiter_name(output_delimiter)
+        if (None == input_inner_delimiter):
+            input_inner_delimiter = input_delimiter
+        else:
+            input_inner_delimiter = decode_delimiter_name(input_inner_delimiter)
         in_file = None
         out_file = None
         try:
@@ -237,6 +261,14 @@ def main(arg_list, stdin, stdout, stderr):
             if (should_close_out_file):
                 out_file = out_io
 
+            # We will parse the inner CSV records with a CSV reader
+            #  that will read from a list that we will continue to push encoded rows onto
+            in_inner_field_list = list()
+            in_inner_csv = csv.reader(
+                in_inner_field_list
+                ,delimiter=input_inner_delimiter
+            )
+
             in_csv = csv.reader(
                 in_io
                 ,delimiter=input_delimiter
@@ -250,8 +282,10 @@ def main(arg_list, stdin, stdout, stderr):
             exit_code = execute(
                 in_csv
                 ,out_csv
-                ,input_row_terminator
-                ,output_row_terminator
+                ,in_inner_csv
+                ,in_inner_field_list
+                ,source_column_name
+                ,should_trim_inner_values
                 ,input_row_start_offset
                 ,input_row_count_max
                 ,output_row_count_max
@@ -277,18 +311,35 @@ def main(arg_list, stdin, stdout, stderr):
 def execute(
     in_csv
     ,out_csv
-    ,input_row_terminator
-    ,output_row_terminator
+    ,in_inner_csv
+    ,in_inner_field_list
+    ,source_column_name
+    ,should_trim_inner_values
     ,in_row_offset_start
     ,in_row_count_max
     ,out_row_count_max
 ):
     exit_code = 0
     end_row = None
-    cr_newline = '\r'
-    lf_newline = '\n'
-    crlf_newline = '\r\n'
-    out_newline = output_row_terminator
+    source_column_name_norm = normalize_column_name(source_column_name)
+    in_source_column_position = None
+    out_source_column_position = None
+
+    in_header_row = next(in_csv, end_row)
+    if (end_row != in_header_row):
+        out_header_row = list()
+        in_column_count = len(in_header_row)
+        in_column_position = 0
+        while (in_column_position < in_column_count):
+            in_column_name = in_header_row[in_column_position]
+            in_column_name_norm = normalize_column_name(in_column_name)
+            if (in_column_name_norm == source_column_name_norm):
+                if (None == in_source_column_position):
+                    in_source_column_position = in_column_position
+            out_header_row.append(in_column_name)
+            in_column_position += 1
+        out_source_column_position = in_source_column_position
+        out_csv.writerow(out_header_row)
     
     in_row_count = 0
     out_row_count = 0
@@ -299,23 +350,41 @@ def execute(
     ):
         in_row_count += 1
         if (in_row_offset_start < in_row_count):
-            out_row = list(in_row)
-            column_count = len(out_row)
-            column_position = 0
-            while (column_position < column_count):
-                cell_value = out_row[column_position]
-                # fix newline characters in the data
-                # (some tools - like postgres - can't handle mixed newline chars)
-                if (None != cell_value):
-                    # replace crlf with lf, then we will replace lf's with the output newline,
-                    #  this prevents us from turning a crlf into a double newline
-                    cell_value = cell_value.replace(crlf_newline, lf_newline)
-                    cell_value = cell_value.replace(cr_newline, lf_newline)
-                    cell_value = cell_value.replace(lf_newline, out_newline)
-                    out_row[column_position] = cell_value
-                column_position += 1
-            out_csv.writerow(out_row)
-            out_row_count += 1
+            in_column_count = len(in_row)
+            in_inner_row = end_row
+            if (None != in_source_column_position
+                and (0 <= in_source_column_position)
+                and (in_column_count > in_source_column_position)
+            ):
+                in_inner_field = in_row[in_source_column_position]
+                if (None != in_inner_field
+                    and 0 < len(in_inner_field)
+                ):
+                    in_inner_field_list.append(in_inner_field)
+                    in_inner_row = next(in_inner_csv, end_row)
+            if (end_row == in_inner_row):
+                # outer join on empty inner list:
+                # just write the input row back out
+                out_row = list(in_row)
+                out_csv.writerow(out_row)
+            else:
+                for in_inner_value in in_inner_row:
+                    out_row = list(in_row)
+                    out_column_count = len(out_row)
+                    if (None != out_source_column_position
+                        and (0 <= out_source_column_position)
+                        and (out_column_count > out_source_column_position)
+                    ):
+                        out_inner_value = in_inner_value
+                        if (should_trim_inner_values
+                            and None != out_inner_value
+                            ):
+                            out_inner_value = out_inner_value.strip()
+                        if (0 == len(out_inner_value)):
+                            out_inner_value = None
+                        out_row[out_source_column_position] = out_inner_value
+                    out_csv.writerow(out_row)
+                    out_row_count += 1
         in_row = next(in_csv, end_row)
     return exit_code
 
