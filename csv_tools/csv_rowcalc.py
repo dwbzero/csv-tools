@@ -1,16 +1,19 @@
-##  Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Copyright (c) 2016-2019 Upstream Research, Inc.  All Rights Reserved.  ##
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-ROWCALC tool version 20170217:20170531\n"
+    "CSV-ROWCALC tool version 20170217:20190506\n"
     "Executes a custom python script on each row of a CSV file\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
+    "Copyright (c) 2017-2019 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-rowcalc [OPTIONS] ScriptFile [CsvInputFile]\n"
     "\n"
     "OPTIONS\n"
     "    -a {S}  Comma separated list of additional columns to add to output\n"
     "    -F {F}  Additional script file to include (option can be used multiple times)\n"
+    "    -K {N}  Number of non-header rows to skip (default=0)\n"
+    "    -n {N}  Number of non-header rows to process from input (default=all)\n"
+    "    -N {N}  Number of non-header rows to write to output (default=all)\n"
     "    -o {F}  Output file name\n"
     "    -X      Interpret the ScriptFile parameter as a Python statement (not a file name)\n"
     "    --row-var    {S}   Name of row map variable (default='row')\n"
@@ -64,6 +67,9 @@ def main(arg_list, stdin, stdout, stderr):
     output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    input_row_start_offset = 0
+    input_row_count_max = None
+    output_row_count_max = None
     include_script_file_name_list = []
     script_file_name = None
     script_content = None
@@ -159,10 +165,39 @@ def main(arg_list, stdin, stdout, stderr):
                 output_row_terminator = arg
         elif (arg == "--cell-width-limit"
           ):
+            arg_index += 1
             if (arg_index < arg_count):
-                arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
+        elif (arg == "-K"
+            or arg == "--row-offset-in"
+            or arg == "--offset"
+            or arg == "--skip"
+        ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                input_row_start_offset = int(arg)
+        elif (arg == "-N"
+            or arg == "--row-count-in"
+        ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                if ('ALL' == arg.upper()):
+                    input_row_count_max = None
+                else:
+                    input_row_count_max = int(arg)
+        elif (arg == "-n"
+            or arg == "--row-count-out"
+        ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                if ('ALL' == arg.upper()):
+                    output_row_count_max = None
+                else:
+                    output_row_count_max = int(arg)
         elif (arg == "--row-var"):
             if (arg_index < arg_count):
                 arg_index += 1
@@ -303,6 +338,9 @@ def main(arg_list, stdin, stdout, stderr):
                 execute(
                     in_csv
                     ,out_csv
+                    ,input_row_start_offset
+                    ,input_row_count_max
+                    ,output_row_count_max
                     ,script_compiled_code
                     ,extra_column_name_list
                     ,row_var_name
@@ -320,6 +358,9 @@ def main(arg_list, stdin, stdout, stderr):
 def execute(
     in_csv
     ,out_csv
+    ,in_row_start_offset
+    ,in_row_count_max
+    ,out_row_count_max
     ,script_compiled_code
     ,extra_column_name_list
     ,row_var_name
@@ -334,47 +375,62 @@ def execute(
         if (None != extra_column_name_list):
             out_header_row = out_header_row + extra_column_name_list
         out_csv.writerow(out_header_row)
-        row_count = 0
-        state_dict = dict()
+
+    in_row_count = 0
+
+    # skip rows before in_row_start_offset
+    in_row = next(in_csv, end_row)
+    while (end_row != in_row
+        and in_row_count < in_row_start_offset
+        and (None == in_row_count_max or in_row_count < in_row_count_max)
+    ):
+        in_row_count += 1
         in_row = next(in_csv, end_row)
-        while (end_row != in_row):
-            # make a dictionary for the row
-            # we don't use a csv.DictReader since we want more flexiblity here
-            row_dict = dict()
+
+    out_row_count = 0
+    state_dict = dict()
+    while (end_row != in_row
+        and (None == in_row_count_max or in_row_count < in_row_count_max)
+        and (None == out_row_count_max or out_row_count < out_row_count_max)
+        ):
+        # make a dictionary for the row
+        # we don't use a csv.DictReader since we want more flexiblity here
+        row_dict = dict()
+        column_position = 0
+        while (column_position < len(in_row)
+            and column_position < len(in_header_row)
+        ):
+            column_name = in_header_row[column_position]
+            row_dict[column_name] = in_row[column_position]
+            column_position += 1
+        # add default values for missing and extra columns
+        default_cell_value = None
+        while (column_position < len(out_header_row)):
+            column_name = out_header_row[column_position]
+            row_dict[column_name] = default_cell_value
+            column_position += 1
+
+        script_variables = dict()
+        script_variables[row_var_name] = row_dict
+        script_variables[state_var_name] = state_dict
+        script_variables[row_offset_var_name] = in_row_count
+        exec(script_compiled_code, script_variables)
+
+        # check if the row variable has been set to None
+        row_dict = script_variables[row_var_name]
+        if (None != row_dict):
+            out_row = list()
             column_position = 0
-            while (column_position < len(in_row)
-                and column_position < len(in_header_row)
-            ):
-                column_name = in_header_row[column_position]
-                row_dict[column_name] = in_row[column_position]
-                column_position += 1
-            # add default values for missing and extra columns
-            default_cell_value = None
             while (column_position < len(out_header_row)):
                 column_name = out_header_row[column_position]
-                row_dict[column_name] = default_cell_value
+                cell_value = row_dict.get(column_name, default_cell_value)
+                out_row.append(cell_value)
                 column_position += 1
+            out_csv.writerow(out_row)
+            out_row_count += 1
 
-            script_variables = dict()
-            script_variables[row_var_name] = row_dict
-            script_variables[state_var_name] = state_dict
-            script_variables[row_offset_var_name] = row_count
-            exec(script_compiled_code, script_variables)
-
-            # check if the row variable has been set to None
-            row_dict = script_variables[row_var_name]
-            if (None != row_dict):
-                out_row = list()
-                column_position = 0
-                while (column_position < len(out_header_row)):
-                    column_name = out_header_row[column_position]
-                    cell_value = row_dict.get(column_name, default_cell_value)
-                    out_row.append(cell_value)
-                    column_position += 1
-                out_csv.writerow(out_row)
-
-            row_count += 1
-            in_row = next(in_csv, end_row)
+        in_row_count += 1
+        in_row = next(in_csv, end_row)
 
 def read_file_content(in_file_name):
     read_text_io_mode = 'rt'
