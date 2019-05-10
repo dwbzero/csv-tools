@@ -2,9 +2,10 @@
 
 import os
 
-## Maps a delimiter name (e.g. "tab") to a delimter value (e.g. "\t")
-## This is mostly useful for tabs since Windows commandline makes it near impossible to specify without an alias name
 def decode_delimiter_name(delimiter_name):
+    ''' Maps a delimiter name (e.g. "tab") to a delimter value (e.g. "\t")
+        This is mostly useful for tabs since Windows commandline makes it near impossible to specify without an alias name
+    '''
     delimiter = delimiter_name
     if (None == delimiter_name):
         pass
@@ -28,6 +29,8 @@ def decode_delimiter_name(delimiter_name):
     return delimiter
 
 def decode_charset_name(in_charset_name):
+    ''' Provides some additional aliases for text encoding names
+    '''
     out_charset_name = in_charset_name
     if (None != out_charset_name):
         out_charset_name = out_charset_name.lower()
@@ -37,6 +40,8 @@ def decode_charset_name(in_charset_name):
     return out_charset_name
 
 def decode_newline(in_newline_name):
+    ''' Provides a commandline-friendly alias for newline character names 
+    '''
     out_newline = in_newline_name
     if (None != out_newline):
         out_newline = out_newline.lower()
@@ -65,7 +70,31 @@ def decode_newline(in_newline_name):
             out_newline = "\r\n"
     return out_newline
 
+def decode_quote_symbol_name(quote_symbol_name):
+    ''' Provides some commandline friendly aliases for quote symbols
+    '''
+    quote_symbol = quote_symbol_name
+    if (None == quote_symbol_name):
+        pass
+    elif ("quot" == quote_symbol_name.lower()
+      or "dquote" == quote_symbol_name.lower()
+      or "double_quote" == quote_symbol_name.lower()
+      or "double-quote" == quote_symbol_name.lower()
+      ):
+        quote_symbol = "\""
+    elif ("apos" == quote_symbol_name.lower()
+      or "squote" == quote_symbol_name.lower()
+      or "single_quote" == quote_symbol_name.lower()
+      or "single-quote" == quote_symbol_name.lower()
+      ):
+        quote_symbol = "'"
+
+    return quote_symbol
+
 def normalize_column_name(column_name):
+    ''' puts a CSV column name into a "normalized" form
+        which is supposed to make it easier for comparison
+    '''
     norm_column_name = column_name
     if (None != norm_column_name):
         norm_column_name = norm_column_name.strip()

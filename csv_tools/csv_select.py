@@ -2,18 +2,20 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-SELECT tool version 20170220:20170531\n"
+    "CSV-SELECT tool version 20170220:20190510\n"
     "Selects a subset of columns from a CSV file\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
+    "Copyright (c) 2017-2019 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-select [OPTIONS] Columns [InputFile]\n"
     "\n"
     "OPTIONS\n"
     "    -o {F}  Output file name\n"
+    "    -T {S}  Column name delimiter (default=,)\n"
     "    -X      Exclude the named columns instead of including them\n"
     "\n"
     "The Columns argument is a comma-separated list of columns to select\n"
-    "from the input stream.\n"
+    "from the input stream.  Use the -T option to use an alternate\n"
+    "column name separator.\n"
     "\n"
     "RENAMING COLUMNS: Columns can (optionally) be renamed in the output \n"
     "by specifying an alias name followed by an equal sign '=', \n"
@@ -64,6 +66,7 @@ def main(arg_list, stdin, stdout, stderr):
     input_charset_error_mode = 'strict'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
     column_name_list_string = None
+    column_name_list_delimiter = ','
     should_exclude_columns = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
@@ -160,6 +163,13 @@ def main(arg_list, stdin, stdout, stderr):
             or arg == "--exclude"
         ):
             should_exclude_columns = True
+        elif (arg == "-T"
+            or arg == "--column-delimiter"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                column_name_list_delimiter = arg
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -170,6 +180,10 @@ def main(arg_list, stdin, stdout, stderr):
         arg_index += 1
     
     if (None == column_name_list_string):
+        show_help = True
+    if (None == column_name_list_delimiter
+        or 0 == len(column_name_list_delimiter)
+    ):
         show_help = True
 
     if (show_help):
@@ -192,7 +206,11 @@ def main(arg_list, stdin, stdout, stderr):
             const_column_value_list = None
             exclusion_column_name_list = None
             if (None != column_name_list_string):
-                column_name_list = column_name_list_string.split(",")
+                #column_name_list = column_name_list_string.split(",")
+                column_name_list = split_csv_string(
+                    column_name_list_string
+                    ,column_name_list_delimiter
+                    )
                 if (should_exclude_columns):
                     exclusion_column_name_list = column_name_list
                 else:
@@ -397,6 +415,37 @@ def normalize_column_name(column_name):
         norm_column_name = norm_column_name.strip()
         norm_column_name = norm_column_name.lower()
     return norm_column_name
+
+## Open a csv reader that will read a string containing an encoded CSV document
+def string_csv_reader(
+    csv_string
+    ,csv_cell_delimiter = ','
+    ,csv_quote_symbol = '"'
+    ,csv_row_delimiter = '\n'
+):
+    in_io = io.StringIO(csv_string)
+    return csv.reader(
+         in_io
+        ,delimiter=csv_cell_delimiter
+        ,quotechar=csv_quote_symbol
+        ,lineterminator=csv_row_delimiter
+        )
+
+
+## Read an encoded CSV row and return a list of cell values
+def split_csv_string(
+    csv_string
+    ,csv_cell_delimiter = ','
+    ,csv_quote_symbol = '"'
+):
+    in_csv = string_csv_reader(
+        csv_string
+        ,csv_cell_delimiter
+        ,csv_quote_symbol
+    )
+    end_row = None
+    in_row = next(in_csv, end_row)
+    return in_row
 
 
 def console_main():

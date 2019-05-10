@@ -4,8 +4,23 @@
 ## #python-3.x
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
+## This file contains a nearly complete commandline tool implementation.
+##  It makes use of a small submodule '_csvhelpers' which provides 
+##   some basic functions to establish consistency among similar commandline tools.
+## This file is organized into a sequence of sections
+##   1. Commandline help text
+##   2. Module Imports
+##   3. main() function implementation
+##   3.1.  Commandline argument parsing loop
+##   3.2.  Commandline argument validation and processing
+##   3.3.  Command initialization (i.e. opening CSV streams, etc.) and invocation.
+##   4. execute() function implementation (i.e. Command implementation)
+##      ** This is where the real work happens **
+##   5. helper functions (if any)
+##   6. main() entry point invocation
+
 help_text = (
-    "CSV-TRANSLATE tool version 20160916:20190501\n"
+    "CSV-TRANSLATE tool version 20160916:20190510\n"
     "Translates delimited text encodings\n"
     "\n"
     "csv-translate [OPTIONS] [InputFile]\n"
@@ -17,6 +32,8 @@ help_text = (
     "    -N {N}  Maximum number of rows to read (default=ALL)\n"
     "    -n {N}  Maximum number of rows to write (default=ALL)\n"
     "    -o {F}  Output file name\n"
+    "    -Q {S}  Input file quote symbol (default '\"')\n"
+    "    -q {S}  Output file quote symbol (default '\"')\n"
     "    -S {S}  Input file field delimiter (default ',')\n"
     "    -s {S}  Output file field delimiter (default ',')\n"
     "    -W {S}  Input line terminator (default '\\r\\n')\n"
@@ -31,6 +48,7 @@ from ._csv_helpers import (
     decode_delimiter_name
     ,decode_charset_name
     ,decode_newline
+    ,decode_quote_symbol_name
     )
 
 
@@ -44,7 +62,9 @@ def main(arg_list, stdin, stdout, stderr):
     input_file_name = None
     output_file_name = None
     input_delimiter = ','
+    input_quote_symbol = '"'
     output_delimiter = ','
+    output_quote_symbol = '"'
     # 'std' will be translated to the standard line break decided by csv_helpers.decode_newline
     input_row_terminator = 'std'
     output_row_terminator = 'std'
@@ -123,6 +143,20 @@ def main(arg_list, stdin, stdout, stderr):
             if (arg_index < arg_count):
                 arg = arg_list[arg_index]
                 output_delimiter = arg
+        elif (arg == "-Q"
+          or arg == "--quote-in"
+          ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                input_quote_symbol = arg
+        elif (arg == "-q"
+          or arg == "--quote-out"
+          ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                output_quote_symbol = arg
         elif (arg == "-W"
           or arg == "--terminator-in"
           or arg == "--newline-in"
@@ -195,7 +229,9 @@ def main(arg_list, stdin, stdout, stderr):
         input_row_terminator = decode_newline(input_row_terminator)
         output_row_terminator = decode_newline(output_row_terminator)
         input_delimiter = decode_delimiter_name(input_delimiter)
-        output_delimiter = decode_delimiter_name(output_delimiter) 
+        output_delimiter = decode_delimiter_name(output_delimiter)
+        input_quote_symbol = decode_quote_symbol_name(input_quote_symbol)
+        output_quote_symbol = decode_quote_symbol_name(output_quote_symbol)
         in_file = None
         out_file = None
         try:
@@ -241,11 +277,13 @@ def main(arg_list, stdin, stdout, stderr):
                 in_io
                 ,delimiter=input_delimiter
                 ,lineterminator=input_row_terminator
+                ,quotechar=input_quote_symbol
                 )
             out_csv = csv.writer(
                 out_io
                 ,delimiter=output_delimiter
                 ,lineterminator=output_row_terminator
+                ,quotechar=output_quote_symbol
                 )
             exit_code = execute(
                 in_csv
@@ -259,6 +297,9 @@ def main(arg_list, stdin, stdout, stderr):
         except BrokenPipeError:
             # this error can occur when a process serving a stdio stream quits
             pass
+        except FileNotFoundError as exc:
+            error_message = "File '{FileName}' not found.".format(FileName=exc.filename)
+            exit_code = -1
         except UnicodeError as exc:
             error_message = str(exc)
             exit_code = -1
@@ -319,6 +360,7 @@ def execute(
         in_row = next(in_csv, end_row)
     return exit_code
 
+# console_main() is the main entry point when invoked from an executable wrapper.
 def console_main():
     return main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
 
