@@ -11,6 +11,7 @@ help_text = (
     "OPTIONS\n"
     "    -o {F}  Output file name\n"
     "    -T {S}  Column name delimiter (default=,)\n"
+    "    -U {S}  Column name quote character (default=\")\n"
     "    -X      Exclude the named columns instead of including them\n"
     "\n"
     "The Columns argument is a comma-separated list of columns to select\n"
@@ -44,6 +45,7 @@ import io
 
 from ._csv_helpers import (
     decode_delimiter_name
+    ,decode_quote_symbol_name
     ,decode_charset_name
     ,decode_newline
     )
@@ -53,10 +55,13 @@ def main(arg_list, stdin, stdout, stderr):
     out_io = stdout
     err_io = stderr
     show_help = False
+    error_message = None
     input_file_name = None
     output_file_name = None
     input_delimiter = ','
+    input_quote_symbol = '"'
     output_delimiter = ','
+    output_quote_symbol = '"'
     # 'std' will be translated to the standard line break decided by csv_helpers.decode_newline
     input_row_terminator = 'std'
     output_row_terminator = 'std'
@@ -67,6 +72,7 @@ def main(arg_list, stdin, stdout, stderr):
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
     column_name_list_string = None
     column_name_list_delimiter = ','
+    column_name_list_quote_symbol = '"'
     should_exclude_columns = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
@@ -135,6 +141,20 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_delimiter = arg
+        elif (arg == "-Q"
+          or arg == "--quote-in"
+          ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                input_quote_symbol = arg
+        elif (arg == "-q"
+          or arg == "--quote-out"
+          ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                output_quote_symbol = arg
         elif (arg == "-W"
           or arg == "--terminator-in"
           or arg == "--newline-in"
@@ -170,6 +190,13 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 column_name_list_delimiter = arg
+        elif (arg == "-U"
+            or arg == "--column-quote"
+        ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                column_name_list_quote_symbol = arg
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -197,7 +224,11 @@ def main(arg_list, stdin, stdout, stderr):
         input_row_terminator = decode_newline(input_row_terminator)
         output_row_terminator = decode_newline(output_row_terminator)
         input_delimiter = decode_delimiter_name(input_delimiter)
-        output_delimiter = decode_delimiter_name(output_delimiter) 
+        output_delimiter = decode_delimiter_name(output_delimiter)
+        input_quote_symbol = decode_quote_symbol_name(input_quote_symbol)
+        output_quote_symbol = decode_quote_symbol_name(output_quote_symbol)
+        column_name_list_delimiter = decode_delimiter_name(column_name_list_delimiter)
+        column_name_list_quote_symbol = decode_quote_symbol_name(column_name_list_quote_symbol)
         in_file = None
         out_file = None
         try:
@@ -210,6 +241,7 @@ def main(arg_list, stdin, stdout, stderr):
                 column_name_list = split_csv_string(
                     column_name_list_string
                     ,column_name_list_delimiter
+                    ,column_name_list_quote_symbol
                     )
                 if (should_exclude_columns):
                     exclusion_column_name_list = column_name_list
@@ -279,8 +311,18 @@ def main(arg_list, stdin, stdout, stderr):
             if (out_close_file):
                 out_file = out_io
 
-            in_csv = csv.reader(in_io, delimiter=input_delimiter, lineterminator=input_row_terminator)
-            out_csv = csv.writer(out_io, delimiter=output_delimiter, lineterminator=output_row_terminator)
+            in_csv = csv.reader(
+                in_io
+                ,delimiter=input_delimiter
+                ,quotechar=input_quote_symbol
+                ,lineterminator=input_row_terminator
+                )
+            out_csv = csv.writer(
+                out_io
+                ,delimiter=output_delimiter
+                ,quotechar=input_quote_symbol
+                ,lineterminator=output_row_terminator
+                )
             if (None != inclusion_column_name_list
                 or None != exclusion_column_name_list
             ):
@@ -293,12 +335,21 @@ def main(arg_list, stdin, stdout, stderr):
                     ,exclusion_column_name_list
                     )
         except BrokenPipeError:
+            # this error can occur when a process serving a stdio stream quits
             pass
+        except FileNotFoundError as exc:
+            error_message = "File '{FileName}' not found.".format(FileName=exc.filename)
+            exit_code = -1
+        except UnicodeError as exc:
+            error_message = str(exc)
+            exit_code = -1
         finally:
             if (None != in_file):
                 in_file.close()
             if (None != out_file):
                 out_file.close()
+    if (None != error_message):
+        err_io.write("Error: {E}\n".format(E=error_message))
 
 def execute(
     in_csv

@@ -51,21 +51,28 @@ def decode_newline(in_newline_name):
         if ("sys" == out_newline):
             out_newline = os.linesep
         elif ("std" == out_newline):
+            # 'std' newline convention is the "standard" for this toolset;
+            #  LF was chosen to try and accommodate some pipe scenarios,
+            #  but this might change.
+            #  The RFC-4180 recommendation is to use \r\n.
             out_newline = "\n"
             #out_newline = os.linesep
         elif ("cr" == out_newline
           or "macintosh" == out_newline
           or "mac" == out_newline
+          or "\\r" == out_newline
         ):
             out_newline = "\r"
         elif ("lf" == out_newline
           or "unix" == out_newline
+          or "\\n" == out_newline
         ):
             out_newline = "\n"
         elif ("crlf" == out_newline
           or "windows" == out_newline
           or "win" == out_newline
           or "dos" == out_newline
+          or "\\r\\n" == out_newline
         ):
             out_newline = "\r\n"
     return out_newline
