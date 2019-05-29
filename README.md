@@ -7,7 +7,7 @@ Copyright (c) 2016-2019 Upstream Research, Inc.  All Rights Reserved.
 
 Source Code is made available under an MIT License.
 
-Revised 2019-05-01 (db)
+Revised 2019-05-29 (db)
 
 ### Overview
 
@@ -17,7 +17,7 @@ in order to accommodate the many idiosyncrasies of CSV data in the wild.
 The general rule here has been to make each program as "dumb" as possible
 in an attempt to follow the "do only one thing, and do it well" principle.
 
-There are a few other decent commandline CSV processing tool-sets out there,
+There are a few other good commandline CSV processing tool-sets out there,
 and this project is not really intended to duplicate those efforts.
 
 The goals for this project are:
@@ -26,6 +26,12 @@ The goals for this project are:
   * Reusable source code - so that more processing tools may be readily developed.
   * Program independence - scripts can be copied individually.
   * Stream processing via STD I/O - to accommodate very large CSV data sources.
+  * A commandline interface that could also be implemented in C.
+
+The last point is worth a remark:
+Python is arguably not the best language for building a commandline toolset.
+Python was chosen in order to get some of these tools written quickly,
+but a better long-term choice would be a low-level language like C.
 
 Some consequences of these goals are that Python 2.x is not supported,
 and some extended cases of CSV format are not easy to support.
@@ -85,7 +91,7 @@ Most tools assume that the CSV file has a header row.
 
 ### The Tools
 
-You can expect this document to be out-of-date, 
+You can expect this document to be somewhat out-of-date, 
 but here is a brief description of some of the tools so that you can get an idea of the flavor of this library.
 
 * `csv-translate` : This is the "prototype" script.  It hardly does anything.
@@ -154,7 +160,7 @@ this will reveal a lot about the data.  We use the `csv-columns` program for thi
 
 We can see above a list of column names from the CSV file.
 It is often instructive to see data associated with these columns
-and it is quite annoying to try and read this in the raw CSV,
+and it is rather annoying to try and read this in the raw CSV,
 however, it is quite a bit easier to read if we "transpose"
 the data so that columns read horizontally instead of vertically.
 We can do this with `csv-columns`:
@@ -183,8 +189,10 @@ The `-N 3` option says "read only the first 3 rows from the input".
     Cases2014,0,3
     Cases2015,0,1
 
+This command gives us a quick and dirty view of the data
+so that we can get an idea of what columns are available.
 With this information, we might want to make a print-out of a selection
-of the data which will allow some greater scrutiny of the data.
+of the columns which will allow some greater scrutiny of the data.
 We will use a command process pipe to select a subset of the columns using `csv-select`
 and to "pretty-print" them using `csv-print`.
 The `csv-print` options `-H` means to print the full header names,
@@ -238,12 +246,12 @@ But first, we have to handle a problem:
     New Hampshire Carroll County 2         4         35        12
 
 This is a complicated way of saying that the CSV file is not encoded as UTF-8.
-We can try to read the file using a different encoding.
+UTF-8 is the default text encoding, but we can try another.
 We `csv-translate` with the `-E cp437` option to interpret the input in "DOS" codepage,
 and we use the `-e utf-8` option so that our output is piped along as UTF-8.
 
-_(If you are accustomed to fighting with CSV files, then you are probably aware
-of text encoding issues and "codepages".  
+_(If you are accustomed to fighting with CSV files, 
+then you are probably aware of text encoding issues and "codepages".  
 In this case, our problem comes from the `LATIN SMALL LETTER N WITH TILDE` character 
 found in "Doña Ana" county New Mexico.
 The name `cp437` is a Python text encoding name,

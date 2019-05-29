@@ -6,7 +6,7 @@
 
 ## This file contains a nearly complete commandline tool implementation.
 ##  It makes use of a small submodule '_csvhelpers' which provides 
-##   some basic functions to establish consistency among similar commandline tools.
+##   some basic functions to establish consistency among other, related commandline tools.
 ## This file is organized into a sequence of sections
 ##   1. Commandline help text
 ##   2. Module Imports
@@ -15,47 +15,46 @@
 ##   3.2.  Commandline argument validation and processing
 ##   3.3.  Command initialization (i.e. opening CSV streams, etc.) and invocation.
 ##   4. execute() function implementation (i.e. Command implementation)
-##      ** This is where the real work happens **
+##      ** execute() is where the real work happens **
 ##   5. helper functions (if any)
 ##   6. main() entry point invocation
 
-help_text = (
-    "CSV-TRANSLATE tool version 20160916:20190510\n"
-    "Translates delimited text encodings\n"
-    "\n"
-    "csv-translate [OPTIONS] [InputFile]\n"
-    "\n"
-    "OPTIONS\n"
-    "    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')\n"
-    "    -K {N}  Number of rows to skip from the input (default=0)\n"
-    "    -N {N}  Maximum number of rows to read (default=ALL)\n"
-    "    -n {N}  Maximum number of rows to write (default=ALL)\n"
-    "    -o {F}  Output file name\n"
-    "    -Q {S}  Input file quote symbol (default='\"')\n"
-    "    -q {S}  Output file quote symbol (default='\"')\n"
-    "    -S {S}  Input file field delimiter (default=',')\n"
-    "    -s {S}  Output file field delimiter (default=',')\n"
-    "    -W {S}  Input line terminator (default='std')\n"
-    "    -w {S}  Output line terminator (default='std')\n"
-    "\n"
-    "Text encoding names are determined by the Python 'codecs' module,\n"
-    "but a few common names like 'utf-8' and 'windows-1252' are recoginized.\n"
-    "See <https://docs.python.org/3/library/codecs.html#standard-encodings>.\n"
-    "\n"
-    "A Field delimiter must be a single character or a delimiter name.\n"
-    "Valid delimiter names are: 'comma', 'tab', 'space', 'semicolon'.\n"
-    "The escape sequence '\\t' is also recognized.\n"
-    "\n"
-    "A quote symbol must be a single character or a quote symbol name.\n"
-    "Valid quote symbol names are: 'apos', 'quot', 'single-quote', 'double-quote'.\n"
-    "\n"
-    "A line terminator may be a character sequence or a line terminator name.\n"
-    "Valid line terminator names are: 'CR', 'LF', 'CRLF', '\\r', '\\n', '\\r\\n',\n"
-    "as well as 'sys', 'std', 'mac', 'unix', 'dos'.\n"
-    "'sys' will use whatever newline convention applies to the OS platform.\n"
-    "'std' will let this tool to decide what to use.\n"
-)
+help_text = """CSV-TRANSLATE tool version 20160916:20190529
+Translates delimited text encodings
+
+csv-translate [OPTIONS] [InputFile]
+
+OPTIONS
+    -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')
+    -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')
+    -K {N}  Number of rows to skip from the input (default=0)
+    -N {N}  Maximum number of rows to read (default=ALL)
+    -n {N}  Maximum number of rows to write (default=ALL)
+    -o {F}  Output file name
+    -Q {S}  Input file quote symbol (default='\"')
+    -q {S}  Output file quote symbol (default='\"')
+    -S {S}  Input file field delimiter (default=',')
+    -s {S}  Output file field delimiter (default=',')
+    -W {S}  Input line terminator (default='std')
+    -w {S}  Output line terminator (default='std')
+
+Text encoding names are determined by the Python 'codecs' module,
+but a few common names like 'utf-8' and 'windows-1252' are recoginized.
+See <https://docs.python.org/3/library/codecs.html#standard-encodings>.
+
+A Field delimiter must be a single character or a delimiter name.
+Valid delimiter names are: 'comma', 'tab', 'space', 'semicolon'.
+The escape sequence '\\t' is also recognized.
+
+A quote symbol must be a single character or a quote symbol name.
+Valid quote symbol names are: 'apos', 'quot', 'single-quote', 'double-quote'.
+
+A line terminator may be a character sequence or a line terminator name.
+Valid line terminator names are: 'CR', 'LF', 'CRLF', '\\r', '\\n', '\\r\\n',
+as well as 'sys', 'std', 'mac', 'unix', 'dos'.
+'sys' will use whatever newline convention applies to the OS platform.
+'std' will let this tool to decide what to use.
+"""
 
 import sys
 import csv
