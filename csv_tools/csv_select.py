@@ -23,7 +23,7 @@ help_text = (
     "followed by the column name in the column name list.\n"
     "\n"
     "FIXED VALUE COLUMNS: New columns can be added to the output\n"
-    "by specifyint a column name that does not exist in the input.\n"
+    "by specify a column name that does not exist in the input.\n"
     "The default value for new columns can be assigned by specifying\n"
     "the column name followed by a double equal sign '==', \n"
     "followed by the value that should be assigned to that column in every row.\n"
