@@ -322,6 +322,9 @@ def execute(
     def get_row_key(in_row):
         return tuple(get_row_key_iter(in_row))
 
+    if (in_header_row != None):
+        out_csv.writerow(in_header_row)
+
     out_row_count = 0
     in_row = next(in_csv, end_row)
     while (end_row != in_row
