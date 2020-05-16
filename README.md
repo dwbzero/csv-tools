@@ -1,19 +1,17 @@
 # CSV Commandline tools
 
-Light-weight python scripts for processing CSV files from commandline.
+Python scripts for processing CSV files from commandline.
 
 
-Copyright (c) 2016-2019 Upstream Research, Inc.  All Rights Reserved.
+Copyright (c) 2016-2020 Upstream Research, Inc.  All Rights Reserved.
 
 Source Code is made available under an MIT License.
 
-Revised 2019-05-29 (db)
+Revised 2020-05-16 (db)
 
 ### Overview
 
 This project consists of a set of separate commandline programs for manipulating CSV data.
-These programs are implemented in Python and are intended to be copied and modified
-in order to accommodate the many idiosyncrasies of CSV data in the wild.
 The general rule here has been to make each program as "dumb" as possible
 in an attempt to follow the "do only one thing, and do it well" principle.
 
@@ -24,7 +22,6 @@ The goals for this project are:
 
   * Minimal external dependencies (best if there are no dependencies at all).
   * Reusable source code - so that more processing tools may be readily developed.
-  * Program independence - scripts can be copied individually.
   * Stream processing via STD I/O - to accommodate very large CSV data sources.
   * A commandline interface that could also be implemented in C.
 
@@ -33,10 +30,7 @@ Python is arguably not the best language for building a commandline toolset.
 Python was chosen in order to get some of these tools written quickly,
 but a better long-term choice would be a low-level language like C.
 
-Some consequences of these goals are that Python 2.x is not supported,
-and some extended cases of CSV format are not easy to support.
-
-Development and usage has been with Python 3.5 on Windows.
+Development and usage has been largely with Python 3.5 on Windows.
 Some attempt has been made to keep compatibility with non-Windows environments
 and with earlier versions of Python, but there are no guarantees right now.
 
@@ -45,7 +39,11 @@ and with earlier versions of Python, but there are no guarantees right now.
 
 Python 3.5 or later.  
 Earlier versions of Python 3.x may also work, but are untested.  
-Unfortunately, Python 2.x does not work due to some issues with unicode support in its base library CSV module.
+
+Unfortunately, Python 2.x does not work 
+due to some issues with unicode support in its base library CSV module.
+Effort has been made to make the programs work with Python 2.x,
+but work is incomplete.
 
 
 ### Installation
@@ -63,26 +61,37 @@ Or - for a "development" installation which allows code to be modified in place:
 See the `setuptools` documentation for details.
 
 
+### Source Code
+
+Much of the source code is written in "C style".
+Many python programmers will find this to be difficult on their eyes.
+Some modules have been rewritten according to pythonic doctrine.
+
+
 ### Usage
 
-Most programs here are intended to be executed independently;
-there is no single "main" program.
-Each provides commandline help using the `--help` option.
-For example:
+The "tools" are a set of python programs which can be executed
+using a "driver" program named `csvf`.
 
-    > csv-translate --help
+If you installed the programs using the setup instructions,
+then a `csvf` executable has been installed in your Path.
+If you have not installed the program,
+you'll need to execute the `csvf.py` script directly.
 
-The programs are packaged into a module to facilitate installation,
-but consequently they cannot be executed as scripts directly by the interpreter.
-They can, however, be executed as modules.
-To execute the csv-translate.py program from the interpreter without installing it,
-CD to the directory containing the csv_tools source directory and execute:
+The driver's job is to simply delegates to a subprogram which does the
+actual work.  There are several subprograms.  Use the `help` command
+to see available subprograms.
 
-    > python -m csv_tools.csv_translate --help
+    > csvf help
 
-Programs are written to work with STD I/O.  
+To get help for the subprogram `translate`, use the help command:
+
+    > csvf help translate
+
+The subprograms are written to work with STD I/O.  
 By default, most programs accept CSV data from STDIN and write CSV data back to STDOUT.
-Python and Windows make this a little difficult for non-ASCII character encodings and for Windows newline (CR-LF) sequences, so be careful.
+Python and Windows make this a little difficult for non-ASCII character encodings 
+and for Windows newline (CR-LF) sequences, so be careful.
 The tools can handle any character encoding that python can handle, 
 but piping I/O in the Windows command shell doesn't always work so well.
 
@@ -91,51 +100,52 @@ Most tools assume that the CSV file has a header row.
 
 ### The Tools
 
-You can expect this document to be somewhat out-of-date, 
-but here is a brief description of some of the tools so that you can get an idea of the flavor of this library.
+Here is a brief description of some of the tools 
+so that you can get an idea of the flavor of this library.
 
-* `csv-translate` : This is the "prototype" script.  It hardly does anything.
+* `translate` : This is the "prototype" script.  It doesn't do much.
     It's function is to translate the formatting of delimited text files,
     which includes the delimiter, the newline encodings, and the character set encodings.
-    This tool is used as a baseline for the other tools, 
-    so most of the other tools are derived from the code from this one.
-* `csv-append` : Combines CSV files by matching row data to column names.
-* `csv-col2row` : Transpose a subset of named columns into rows.
-* `csv-columns` : Transposes a CSV stream.
+    It can also be used as a CSV "head" command to get initial rows.
+* `append` : Combines CSV files by matching row data to column names.
+* `col2row` : Transpose a subset of named columns into rows.
+* `columns` : Transposes a CSV stream.
     In the default case, it prints the first row of an input CSV stream,
     one line of output per column from the input.
     This has the effect of printing the column header names
     on separate lines in the default case.
     In more extended cases, it prints the data across rather than down,
     which can be useful for reading CSV data in a terminal.
-* `csv-count` : Count rows, columns, cells in a CSV stream.
-* `csv-distinct` : Finds distict values in a column of a CSV stream.
-* `csv-filter` : Very simplistic row filter for a CSV stream
-* `csv-headmerge` : Merge multiple header rows into one row.
-* `csv-join` : Joins records from an input CSV stream to records in a base CSV file.
-* `csv-json` : Does a simplistic conversion of JSON to CSV.
-* `csv-prepend` : Insert a header row to a CSV stream.
-* `csv-print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
-* `csv-rejoin` : Expand a CSV list embedded in a CSV column as a nested outer join.
-* `csv-row2col` : Transposes "named rows" into columns
-* `csv-rowcalc` : Runs a python script for each row in a CSV stream.
+* `count` : Count rows, columns, cells in a CSV stream.
+* `distinct` : Finds distict values in a column of a CSV stream.
+* `filter` : Very simplistic row filter for a CSV stream
+* `headmerge` : Merge multiple header rows into one row.
+* `join` : Joins records from an input CSV stream to records in a base CSV file.
+* `json` : Does a simplistic conversion of JSON to CSV.
+* `prepend` : Insert a header row to a CSV stream.
+* `print` : Converts CSV to fixed-with text which is helpful for reading CSV data in a terminal.
+* `rejoin` : Expand a CSV list embedded in a CSV column as a nested outer join.
+* `row2col` : Transposes "named rows" into columns
+* `rowcalc` : Runs a python script for each row in a CSV stream.
     Can be used as a "field calculator".
-* `csv-rownum` : Prepends a row number column to a CSV stream.
-* `csv-select` : Selects a subset of columns from a CSV stream.
-* `csv-sort` : Sort rows in a CSV stream.
-* `csv-tail` : Filters the tail rows from a CSV stream.
+* `rownum` : Prepends a row number column to a CSV stream.
+* `select` : Selects a subset of columns from a CSV stream.
+* `sort` : Sort rows in a CSV stream.
+* `tail` : Filters the tail rows from a CSV stream.
 
 ### Walkthrough Example: Lyme Disease Cases from US CDC
 
-Suppose you have downloaded the `ld-case-counts-by-county-00-15.csv` data file from the US CDC website.
-(It turns-out that this file is not very large, and you could view it using a Spreadsheet program,
+Suppose you have downloaded the `ld-case-counts-by-county-00-15.csv` data file 
+from the US CDC website.
+(It turns-out that this file is not very large, 
+and you could view it using a Spreadsheet program,
 but this example applies to very large files that are often impractical to open.)
 It is reported that this file contains numbers of confirmed cases of Lyme disease 
 occurring in various counties in the USA in 2015.
 The first step is to see if there is a "header" row containing column names;
-this will reveal a lot about the data.  We use the `csv-columns` program for this:
+this will reveal a lot about the data.  We use the `columns` subprogram for this:
 
-    > csv-columns ld-case-counts-by-county-00-15.csv
+    > csvf columns ld-case-counts-by-county-00-15.csv
     
     STNAME
     CTYNAME
@@ -163,10 +173,10 @@ It is often instructive to see data associated with these columns
 and it is rather annoying to try and read this in the raw CSV,
 however, it is quite a bit easier to read if we "transpose"
 the data so that columns read horizontally instead of vertically.
-We can do this with `csv-columns`:
+We can do this with `csvf columns`:
 The `-N 3` option says "read only the first 3 rows from the input".
 
-    > csv-columns -N 3 ld-case-counts-by-county-00-15.csv
+    > csvf columns -N 3 ld-case-counts-by-county-00-15.csv
 
     STNAME,Alabama,Alabama
     CTYNAME,Autauga County,Baldwin County
@@ -193,17 +203,17 @@ This command gives us a quick and dirty view of the data
 so that we can get an idea of what columns are available.
 With this information, we might want to make a print-out of a selection
 of the columns which will allow some greater scrutiny of the data.
-We will use a command process pipe to select a subset of the columns using `csv-select`
-and to "pretty-print" them using `csv-print`.
-The `csv-print` options `-H` means to print the full header names,
+We will use a command process pipe to select a subset of the columns using `csvf select`
+and to "pretty-print" them using `csvf print`.
+The `csvf print` options `-H` means to print the full header names,
 `-N 10` means "analyze the first 10 rows to determine column widths",
 and `-n 20` means "stop printing after 20 rows".
 By convention, command options are uppercase if they apply to the input,
 and they are lowercase if they apply to the output.
 _(If you run into a `UnicodeDecodeError`, then keep reading...)_
 
-    > csv-select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 ld-case-counts-by-county-00-15.csv 
-      | csv-print -H -N 10 -n 20
+    > csvf select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 ld-case-counts-by-county-00-15.csv 
+      | csvf print -H -N 10 -n 20
     
     STNAME  CTYNAME         Cases2000 Cases2005 Cases2010 Cases2015
     Alabama Autauga County  0         0         0         0
@@ -227,19 +237,15 @@ _(If you run into a `UnicodeDecodeError`, then keep reading...)_
     Alabama Coosa County    0         0         0         0
 
 It turns out that for Lyme disease, Alabama is not as interesting as some other US States,
-we can use the `csv-filter` command to select a different state.
+we can use the `csvf filter` command to select a different state.
 But first, we have to handle a problem:
 
-    > csv-filter STNAME = "New Hampshire" ld-case-counts-by-county-00-15.csv 
-      | csv-select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 
-      | csv-print -H -N 10 -n 20
+    > csvf filter STNAME = "New Hampshire" ld-case-counts-by-county-00-15.csv 
+      | csvf select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 
+      | csvf print -H -N 10 -n 20
     
     Traceback (most recent call last):
-      File "csv-filter-script.py", line 9, in <module>
-        load_entry_point('csv-tools==0.5.0', 'console_scripts', 'csv-filter')()
-      ...
-      File "utf_8_sig.py", line 69, in _buffer_decode
-        return codecs.utf_8_decode(input, errors, final)
+        ....
     UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa4 in position 3156: invalid start byte
     STNAME        CTYNAME        Cases2000 Cases2005 Cases2010 Cases2015
     New Hampshire Belknap County 5         2         34        20
@@ -247,7 +253,7 @@ But first, we have to handle a problem:
 
 This is a complicated way of saying that the CSV file is not encoded as UTF-8.
 UTF-8 is the default text encoding, but we can try another.
-We `csv-translate` with the `-E cp437` option to interpret the input in "DOS" codepage,
+We `csvf translate` with the `-E cp437` option to interpret the input in "DOS" codepage,
 and we use the `-e utf-8` option so that our output is piped along as UTF-8.
 
 _(If you are accustomed to fighting with CSV files, 
@@ -265,11 +271,11 @@ so that it will know how to display the output:
     @REM if this is a Windows command prompt, change the active code page to UTF-8
     > chcp 65001
     
-    > csv-translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
-      | csv-filter STNAME = "New Hampshire" 
-      | csv-select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 
-      | csv-print -H -N 10 -n 20
-      
+    > csvf translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
+      | csvf filter STNAME = "New Hampshire" 
+      | csvf select STNAME,CTYNAME,Cases2000,Cases2005,Cases2010,Cases2015 
+      | csvf print -H -N 10 -n 20
+    
     STNAME        CTYNAME             Cases2000 Cases2005 Cases2010 Cases2015
     New Hampshire Belknap County      5         2         34        20
     New Hampshire Carroll County      2         4         35        12
@@ -292,7 +298,7 @@ references counties by the usual 5-digit State/County "FIPS" code
 We need to format a new column, which we will call "GEOID" (Geographic ID).
 Notice also, that the `STCODE` and `CTYCODE` were not fixed-width (as would be conventional),
 so we want also to fix those up.
-We can use `csv-rowcalc` to do this.
+We can use `rowcalc` to do this.
 Its job is to execute a python script for each row in the CSV input.
 First, we need a "field calculator" script.
 Open a text editor, insert the code below, and save it as `ld-case-counts-by-county.rowcalc.py`:
@@ -317,19 +323,21 @@ Open a text editor, insert the code below, and save it as `ld-case-counts-by-cou
 
 This script will be executed for each row in the input file.
 Each time the script is executed, 
-the `row` variable will contain the cells of the current row as a python dictionary of string values.
-This code uses the Python string `rjust` method to pad the state and county codes with zeros,
+the `row` variable will contain the cells of the current row 
+as a python dictionary of string values.
+This code uses the Python string `rjust` method 
+to pad the state and county codes with zeros,
 then it concats the padded state and county codes together to create the GEOID.
 
-We use this script with `csv-rowcalc` and check that it does what we want.
+We use this script with `csvf rowcalc` and check that it does what we want.
 We will use the `-a GEOID` option to append a new column named `GEOID`
-and we will pipe it to `csv-columns` to see some of the new records.
+and we will pipe it to `csvf columns` to see some of the new records.
 Also, we need to specify our input encoding, so we include 
-the `csv-translate` process as shown earlier.
+the `csvf translate` process as shown earlier.
 
-    > csv-translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
-    | csv-rowcalc -a GEOID ld-case-counts-by-county.rowcalc.py 
-    | csv-columns -N 3
+    > csvf translate -E cp437 -e utf-8 ld-case-counts-by-county-00-15.csv 
+    | csvf rowcalc -a GEOID ld-case-counts-by-county.rowcalc.py 
+    | csvf columns -N 3
 
     STNAME,Alabama,Alabama
     CTYNAME,Autauga County,Baldwin County
@@ -358,18 +366,22 @@ but we need to save it in order to use it with our GIS software.
 We can save it using the `-o` option.
 We name the file a little differently to clarify that it has a `GEOID` column
 and that the encoding is UTF-8.
-Also, we don't actually need to use `csv-translate` to translate the encoding
+Also, we don't actually need to use `csvf translate` to translate the encoding
 since all of the CSV programs currently support the text encoding options
 (even if their help contents don't say so).
 Finally, the `-e` option is unnecessary since UTF-8 is the default output encoding.
 
-    > csv-rowcalc -E cp437 -a GEOID ld-case-counts-by-county.rowcalc.py ld-case-counts-by-county-00-15.csv -o ld-case-counts-by-county-geoid-00-15.utf8.csv
+    > csvf rowcalc -E cp437 -a GEOID ld-case-counts-by-county.rowcalc.py ld-case-counts-by-county-00-15.csv -o ld-case-counts-by-county-geoid-00-15.utf8.csv
 
 We now have a file named `ld-case-counts-by-county-geoid-00-15.utf8.csv`
 that contains a GEOID column and that is suitable for use as a GIS attribute table.
 
 There are other operations we may want to perform on the data:
 
-  * We can use the `csv-col2row` program to transpose the `CasesYYYY` columns into rows with `YEAR` and `Cases` columns.
-  * We could join this file to another file containing county population numbers (using `csv-join`) so that we could compute some sort of incidence rate.
-  * We could remove rows from the dataset that don't actually represent counties (there are some in there...)
+  * We can use the `csvf col2row` program to transpose the `CasesYYYY` columns 
+    into rows with `YEAR` and `Cases` columns.
+  * We could join this file to another file 
+    containing county population numbers (using `csvf join`) 
+    so that we could compute some sort of incidence rate.
+  * We could remove rows from the dataset that don't actually represent counties 
+    (there are some in there...)

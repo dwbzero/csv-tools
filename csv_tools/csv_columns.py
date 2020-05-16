@@ -2,7 +2,7 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-COLUMNS tool version 20160919:20170215\n"
+    "CSV-COLUMNS tool version 20160919:20200516\n"
     "Print column names and transpose delimited text encodings\n"
     "Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
@@ -19,13 +19,14 @@ help_text = (
 )
 
 import sys
-import csv
 import io
 
-from ._csv_helpers import (
-    decode_delimiter_name
-    ,decode_charset_name
-    ,decode_newline
+from .base import csv2
+from .base.csv2 import (
+    lookup_delimiter,
+    lookup_charset,
+    lookup_newline,
+    lookup_quote_symbol,
     )
 
 def main(arg_list, stdin, stdout, stderr):
@@ -169,60 +170,54 @@ def main(arg_list, stdin, stdout, stderr):
     else:
         # set global CSV column width
         if (None != csv_cell_width_limit):
-            csv.field_size_limit(csv_cell_width_limit)
-        input_charset_name = decode_charset_name(input_charset_name)
-        output_charset_name = decode_charset_name(output_charset_name)
-        input_row_terminator = decode_newline(input_row_terminator)
-        output_row_terminator = decode_newline(output_row_terminator)
-        input_delimiter = decode_delimiter_name(input_delimiter)
-        output_delimiter = decode_delimiter_name(output_delimiter) 
+            csv2.set_global_csv_field_size_limit(csv_cell_width_limit)
+        input_charset_name = lookup_charset(input_charset_name)
+        output_charset_name = lookup_charset(output_charset_name)
+        input_row_terminator = lookup_newline(input_row_terminator)
+        output_row_terminator = lookup_newline(output_row_terminator)
+        input_delimiter = lookup_delimiter(input_delimiter)
+        output_delimiter = lookup_delimiter(output_delimiter) 
         in_file = None
         out_file = None
         try:
-            read_text_io_mode = 'rt'
-            #in_newline_mode = ''  # don't translate newline chars
-            in_newline_mode = input_row_terminator
+            read_text_io_mode = 'r'
             in_file_id = input_file_name
             should_close_in_file = True
             if (None == in_file_id):
                 in_file_id = in_io.fileno()
                 should_close_in_file = False
-            in_io = io.open(
+            in_io = csv2.csv_open(
                  in_file_id
                 ,mode=read_text_io_mode
                 ,encoding=input_charset_name
-                ,newline=in_newline_mode
                 ,errors=input_charset_error_mode
                 ,closefd=should_close_in_file
                 )
             if (should_close_in_file):
                 in_file = in_io
 
-            write_text_io_mode = 'wt'
-            out_newline_mode=''  # don't translate newline chars
-            #out_newline_mode = output_row_terminator
+            write_text_io_mode = 'w'
             out_file_id = output_file_name
             should_close_out_file = True
             if (None == out_file_id):
                 out_file_id = out_io.fileno()
                 should_close_out_file = False
-            out_io = io.open(
+            out_io = csv2.csv_open(
                  out_file_id
                 ,mode=write_text_io_mode
                 ,encoding=output_charset_name
-                ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
                 ,closefd=should_close_out_file
                 )
             if (should_close_out_file):
                 out_file = out_io
 
-            in_csv = csv.reader(
+            in_csv = csv2.CsvReader(
                 in_io
                 ,delimiter=input_delimiter
                 ,lineterminator=input_row_terminator
                 )
-            out_csv = csv.writer(
+            out_csv = csv2.CsvWriter(
                 out_io
                 ,delimiter=output_delimiter
                 ,lineterminator=output_row_terminator

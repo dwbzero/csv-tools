@@ -1,28 +1,35 @@
-##  Copyright (c) 2016-2019 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Copyright (c) 2016-2020 Upstream Research, Inc.  All Rights Reserved.  ##
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
+""" Translate delimited text encodings.
 
-## #python-3.x
-## python 2 does not work due mostly to issues with csv and io modules with unicode data
+    Defines a csv processor class which can be used as a base class
+    for other csv processors.
+    See the csv_count module for an example of how to derive from this class.
+"""
 
-## This file contains a nearly complete commandline tool implementation.
-##  It makes use of a small submodule '_csvhelpers' which provides 
-##   some basic functions to establish consistency among other, related commandline tools.
-## This file is organized into a sequence of sections
-##   1. Commandline help text
-##   2. Module Imports
-##   3. main() function implementation
-##   3.1.  Commandline argument parsing loop
-##   3.2.  Commandline argument validation and processing
-##   3.3.  Command initialization (i.e. opening CSV streams, etc.) and invocation.
-##   4. execute() function implementation (i.e. Command implementation)
-##      ** execute() is where the real work happens **
-##   5. helper functions (if any)
-##   6. main() entry point invocation
+# This module serves as a basis for the other CSV modules.
+# Eventually, some of this code may need to be refactored
+#  into a more basic class.
 
-help_text = """CSV-TRANSLATE tool version 20160916:20190529
+
+from contextlib import contextmanager
+import errno
+import os
+import sys
+
+from .base.pyver import irange
+from .base import csv2
+from .base.csv2 import (
+    lookup_delimiter,
+    lookup_charset,
+    lookup_newline,
+    lookup_quote_symbol,
+    )
+
+HELP_TEXT = """{program_name} tool version 20160916:20200516
 Translates delimited text encodings
 
-csv-translate [OPTIONS] [InputFile]
+{program_name} [OPTIONS] [InputFile]
 
 OPTIONS
     -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')
@@ -56,330 +63,297 @@ as well as 'sys', 'std', 'mac', 'unix', 'dos'.
 'std' will let this tool to decide what to use.
 """
 
-import sys
-import csv
-import io
+class CsvTranslateProcessor(object):
+    """ Implements a CSV format translator.
 
-from ._csv_helpers import (
-    decode_delimiter_name
-    ,decode_charset_name
-    ,decode_newline
-    ,decode_quote_symbol_name
-    )
-
-
-def main(arg_list, stdin, stdout, stderr):
+        This class is meant to be used as a base class for more specialized
+        csv processing tools.
+    """
+    program_name = "{csv_processor}"
     exit_code = 0
-    in_io = stdin
-    out_io = stdout
-    err_io = stderr
-    show_help = False
-    error_message = None
-    input_file_name = None
-    output_file_name = None
-    input_delimiter = ','
-    input_quote_symbol = '"'
-    output_delimiter = ','
-    output_quote_symbol = '"'
-    # 'std' will be translated to the standard line break decided by csv_helpers.decode_newline
-    input_row_terminator = 'std'
-    output_row_terminator = 'std'
-    input_charset_name = 'utf_8_sig'
-    output_charset_name = 'utf_8'
-    output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
-    input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    help_text = HELP_TEXT
+    should_print_help = False
+    #error_message = None
+    in_file_name = None
+    out_file_name = None
+    in_delimiter = ','
+    in_quote_symbol = '"'
+    out_delimiter = ','
+    out_quote_symbol = '"'
+    in_row_terminator = 'std'
+    out_row_terminator = 'std'
+    in_charset_name = 'utf_8_sig'
+    out_charset_name = 'utf_8'
+    out_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    in_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
-    input_row_start_offset = 0
-    input_row_count_max = None
-    output_row_count_max = None
-    # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
-    arg_count = len(arg_list)
-    arg_index = 1
-    while (arg_index < arg_count):
-        arg = arg_list[arg_index]
-        if (arg == "--help" 
-          or arg == "-?"
-          ):
-            show_help = True
-        elif (arg == "-o"
-          or arg == "--output"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_file_name = arg
-        elif (arg == "-E"
-          or arg == "--charset-in"
-          or arg == "--encoding-in"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_charset_name = arg
-        elif (arg == "-e"
-          or arg == "--charset-out"
-          or arg == "--encoding-out"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_charset_name = arg
-        elif (arg == "--charset-in-error-mode"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_charset_error_mode = arg
-        elif (arg == "--charset-out-error-mode"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_charset_error_mode = arg
-        elif (arg == "--charset-error-mode"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_charset_error_mode = arg
-                output_charset_error_mode = arg
-        elif (arg == "-S"
-          or arg == "--separator-in"
-          or arg == "--delimiter-in"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_delimiter = arg
-        elif (arg == "-s"
-          or arg == "--separator-out"
-          or arg == "--delimiter-out"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_delimiter = arg
-        elif (arg == "-Q"
-          or arg == "--quote-in"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_quote_symbol = arg
-        elif (arg == "-q"
-          or arg == "--quote-out"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_quote_symbol = arg
-        elif (arg == "-W"
-          or arg == "--terminator-in"
-          or arg == "--newline-in"
-          or arg == "--endline-in"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_row_terminator = arg
-        elif (arg == "-w"
-          or arg == "--terminator-out"
-          or arg == "--newline-out"
-          or arg == "--endline-out"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                output_row_terminator = arg
-        elif (arg == "--cell-width-limit"
-          ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                csv_cell_width_limit = int(arg)
-        elif (arg == "-K"
-            or arg == "--row-offset-in"
-            or arg == "--offset"
-            or arg == "--skip"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                input_row_start_offset = int(arg)
-        elif (arg == "-N"
-            or arg == "--row-count-in"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    input_row_count_max = None
-                else:
-                    input_row_count_max = int(arg)
-        elif (arg == "-n"
-            or arg == "--row-count-out"
-        ):
-            arg_index += 1
-            if (arg_index < arg_count):
-                arg = arg_list[arg_index]
-                if ('ALL' == arg.upper()):
-                    output_row_count_max = None
-                else:
-                    output_row_count_max = int(arg)
-        elif (None != arg
-          and 0 < len(arg)
-          ):
-            if (None == input_file_name):
-                input_file_name = arg
-        arg_index += 1
+    in_row_offset_start = 0
+    in_row_count_max = None
+    out_row_count_max = None
 
-    if (show_help):
+    def __init__(self):
+        pass
+
+    def parse_next(self, arg, arg_iter):
+        """ Parse the next argument flag from an argument iterator.
+
+            Returns True if the argument was parsed:
+            the parser should then get the next arg from arg_iter
+            and keep parsing.
+            Returns False if the argument was not parsed:
+            the parser should try to parse the current argument
+            according to any other parsing rules it may have.
+        """
+        succeeded = True
+        arg_obj = self
+        if arg in ("--help", "-?"):
+            arg_obj.should_print_help = True
+        elif arg in ("-o", "--output"):
+            arg_obj.out_file_name = next(arg_iter)
+        elif arg in ("-E", "--encoding-in", "--charset-in"):
+            arg_obj.in_charset_name = next(arg_iter)
+        elif arg in ("-e", "--encoding-out", "--charset-out"):
+            arg_obj.out_charset_name = next(arg_iter)
+        elif arg in ("--charset-in-error-mode",):
+            arg_obj.in_charset_error_mode = next(arg_iter)
+        elif arg in ("--charset-out-error-mode",):
+            arg_obj.out_charset_error_mode = next(arg_iter)
+        elif arg in ("--charset-error_mode",):
+            error_mode = next(arg_iter)
+            arg_obj.in_charset_error_mode = error_mode
+            arg_obj.out_charset_error_mode = error_mode
+        elif arg in ("-S", "--separator-in", "--delimiter-in"):
+            arg_obj.in_delimiter = next(arg_iter)
+        elif arg in ("-s", "--separator-out", "--delimiter-out"):
+            arg_obj.out_delimiter = next(arg_iter)
+        elif arg in ("-Q", "--quote-in"):
+            arg_obj.in_quote_symbol = next(arg_iter)
+        elif arg in ("-q", "--quote-out"):
+            arg_obj.out_quote_symbol = next(arg_iter)
+        elif arg in ("-W", "--terminator-in", "--newline-in", "--endline-in"):
+            arg_obj.in_row_terminator = next(arg_iter)
+        elif arg in ("-w", "--terminator-out", "--newline-out", "--endline-out"):
+            arg_obj.out_row_terminator = next(arg_iter)
+        elif arg in ("--cell-width-limit",):
+            arg_obj.csv_cell_width_limit = int(next(arg_iter))
+        elif arg in ("-K", "--row-offset-in", "--offset", "--skip"):
+            arg_obj.in_row_offset_start = int(next(arg_iter))
+        elif arg in ("-N", "--row-count-in"):
+            arg = next(arg_iter)
+            row_count = None
+            if arg.upper() != 'ALL':
+                row_count = int(arg)
+            arg_obj.in_row_count_max = row_count
+        elif arg in ("-n", "--row-count-out"):
+            arg = next(arg_iter)
+            row_count = None
+            if arg.upper() != 'ALL':
+                row_count = int(arg)
+            arg_obj.out_row_count_max = row_count
+        elif arg.startswith("-"):
+            succeeded = False
+        elif arg_obj.in_file_name is None:
+            arg_obj.in_file_name = arg
+        else:
+            succeeded = False
+        return succeeded
+
+    def parse_args(self, argv):
+        """ Parse a list of commandline arguments into attributes of this object. """
+        # [20160916 [db] I avoided using argparse
+        #  in order to retain some flexibility for command syntax]
+        arg_obj = self
+        arg_iter = iter(argv)
+        program_path = next(arg_iter)
+        arg_obj.program_name = os.path.basename(program_path)
+        for arg in arg_iter:
+            if arg_obj.parse_next(arg, arg_iter):
+                pass
+            else:
+                raise LookupError("Unknown argument: " + arg)
+        arg_obj.in_charset_name = lookup_charset(arg_obj.in_charset_name)
+        arg_obj.out_charset_name = lookup_charset(arg_obj.out_charset_name)
+        arg_obj.in_row_terminator = lookup_newline(arg_obj.in_row_terminator)
+        arg_obj.out_row_terminator = lookup_newline(arg_obj.out_row_terminator)
+        arg_obj.in_delimiter = lookup_delimiter(arg_obj.in_delimiter)
+        arg_obj.out_delimiter = lookup_delimiter(arg_obj.out_delimiter)
+        arg_obj.in_quote_symbol = lookup_quote_symbol(arg_obj.in_quote_symbol)
+        arg_obj.out_quote_symbol = lookup_quote_symbol(arg_obj.out_quote_symbol)
+
+        return arg_obj
+
+    def print_help(self, out_io):
+        """ Print command help information to a stream. """
+        help_text = self.help_text.replace("{program_name}", self.program_name)
         out_io.write(help_text)
-    else:
-        # set global CSV column width
-        if (None != csv_cell_width_limit):
-            csv.field_size_limit(csv_cell_width_limit)
 
-        input_charset_name = decode_charset_name(input_charset_name)
-        output_charset_name = decode_charset_name(output_charset_name)
-        input_row_terminator = decode_newline(input_row_terminator)
-        output_row_terminator = decode_newline(output_row_terminator)
-        input_delimiter = decode_delimiter_name(input_delimiter)
-        output_delimiter = decode_delimiter_name(output_delimiter)
-        input_quote_symbol = decode_quote_symbol_name(input_quote_symbol)
-        output_quote_symbol = decode_quote_symbol_name(output_quote_symbol)
-        in_file = None
+    @contextmanager
+    def open_writer(self, out_io, err_io):
+        """ Open an output CSV writer. """
+        arg_obj = self
+        out_file_name = arg_obj.out_file_name
+        out_charset_name = arg_obj.out_charset_name
+        out_charset_error_mode = arg_obj.out_charset_error_mode
+        out_delimiter = arg_obj.out_delimiter
+        out_row_terminator = arg_obj.out_row_terminator
+        out_quote_symbol = arg_obj.out_quote_symbol
         out_file = None
+        write_text_io_mode = 'w'
+        out_file_id = out_file_name
+        should_close_out_file = True
+        if not out_file_id:
+            out_file_id = out_io.fileno()
+            should_close_out_file = False
+        out_io = csv2.csv_open(
+            out_file_id,
+            mode=write_text_io_mode,
+            encoding=out_charset_name,
+            errors=out_charset_error_mode,
+            closefd=should_close_out_file,
+            )
+        if should_close_out_file:
+            out_file = out_io
+        out_csv = csv2.CsvWriter(
+            out_io,
+            delimiter=out_delimiter,
+            lineterminator=out_row_terminator,
+            quotechar=out_quote_symbol,
+            )
+        # @contextmanager: enter: yield this object to the with statement:
+        yield out_csv
+        # @contextmanager: exit: after the yield close the stream:
+        if should_close_out_file and out_file:
+            out_file.close()
+
+    @contextmanager
+    def open_reader(self, in_io, err_io):
+        """ Open an input CSV reader, and return an iterator that can read rows. """
+        # set global CSV column width
+        arg_obj = self
+        csv_cell_width_limit = arg_obj.csv_cell_width_limit
+        in_file_name = arg_obj.in_file_name
+        in_charset_name = arg_obj.in_charset_name
+        in_charset_error_mode = arg_obj.in_charset_error_mode
+        in_delimiter = arg_obj.in_delimiter
+        in_row_terminator = arg_obj.in_row_terminator
+        in_quote_symbol = arg_obj.in_quote_symbol
+
+        if csv_cell_width_limit:
+            csv2.set_global_csv_field_size_limit(csv_cell_width_limit)
+
+        in_file = None
+        read_text_io_mode = 'r'
+        in_file_id = in_file_name
+        should_close_in_file = True
+        if not in_file_id:
+            in_file_id = in_io.fileno()
+            should_close_in_file = False
+        in_io = csv2.csv_open(
+            in_file_id,
+            mode=read_text_io_mode,
+            encoding=in_charset_name,
+            errors=in_charset_error_mode,
+            closefd=should_close_in_file,
+            )
+        if should_close_in_file:
+            in_file = in_io
+
+        in_csv = csv2.CsvReader(
+            in_io,
+            delimiter=in_delimiter,
+            lineterminator=in_row_terminator,
+            quotechar=in_quote_symbol,
+            )
+        # @contextmanager: enter: yield this object to the with statement:
+        yield in_csv
+        # @contextmanager: exit: after the yield close the stream:
+        if should_close_in_file and in_file:
+            in_file.close()
+
+    def main(self, argv, in_io, out_io, err_io):
+        """ Implements main entry point function. """
+        exe = self
+        exit_code = 0
+        error_message = None
         try:
-            read_text_io_mode = 'rt'
-            #in_newline_mode = ''  # don't translate newline chars
-            in_newline_mode = input_row_terminator
-            in_file_id = input_file_name
-            should_close_in_file = True
-            if (None == in_file_id):
-                in_file_id = in_io.fileno()
-                should_close_in_file = False
-            in_io = io.open(
-                 in_file_id
-                ,mode=read_text_io_mode
-                ,encoding=input_charset_name
-                ,newline=in_newline_mode
-                ,errors=input_charset_error_mode
-                ,closefd=should_close_in_file
-                )
-            if (should_close_in_file):
-                in_file = in_io
-
-            write_text_io_mode = 'wt'
-            out_newline_mode=''  # don't translate newline chars
-            #out_newline_mode = output_row_terminator
-            out_file_id = output_file_name
-            should_close_out_file = True
-            if (None == out_file_id):
-                out_file_id = out_io.fileno()
-                should_close_out_file = False
-            out_io = io.open(
-                 out_file_id
-                ,mode=write_text_io_mode
-                ,encoding=output_charset_name
-                ,newline=out_newline_mode
-                ,errors=output_charset_error_mode
-                ,closefd=should_close_out_file
-                )
-            if (should_close_out_file):
-                out_file = out_io
-
-            in_csv = csv.reader(
-                in_io
-                ,delimiter=input_delimiter
-                ,lineterminator=input_row_terminator
-                ,quotechar=input_quote_symbol
-                )
-            out_csv = csv.writer(
-                out_io
-                ,delimiter=output_delimiter
-                ,lineterminator=output_row_terminator
-                ,quotechar=output_quote_symbol
-                )
-            exit_code = execute(
-                in_csv
-                ,out_csv
-                ,input_row_terminator
-                ,output_row_terminator
-                ,input_row_start_offset
-                ,input_row_count_max
-                ,output_row_count_max
-                )
-        except BrokenPipeError:
-            # this error can occur when a process serving a stdio stream quits
-            pass
-        except FileNotFoundError as exc:
-            error_message = "File '{FileName}' not found.".format(FileName=exc.filename)
-            exit_code = -1
+            exe.parse_args(argv)
+            if exe.should_print_help:
+                exe.print_help(out_io)
+            else:
+                with exe.open_reader(in_io, err_io) as in_csv:
+                    with exe.open_writer(out_io, err_io) as out_csv:
+                        for row in exe.process(in_csv):
+                            out_csv.writerow(row)
+        except IOError as exc:
+            if exc.errno == errno.EPIPE:
+                # (also BrokenPipeError python 3)
+                # can occur when a process serving a stdio stream quits
+                pass
+            elif exc.errno == errno.ENOENT:
+                # (also FileNotFoundError python 3)
+                error_message = "File '{FileName}' not found.".format(FileName=exc.filename)
+                exit_code = 1
+            else:
+                raise
         except UnicodeError as exc:
             error_message = str(exc)
-            exit_code = -1
-        finally:
-            if (None != in_file):
-                in_file.close()
-                in_file = None
-            if (None != out_file):
-                out_file.close()
-                out_file = None
-    if (None != error_message):
-        err_io.write("Error: {E}\n".format(E=error_message))
+            exit_code = 1
+            raise
+        if error_message:
+            err_io.write("Error: {E}\n".format(E=error_message))
+            exit_code = 1
+        return exit_code
 
-    return exit_code
+    def process(self, rows):
+        """ Return a generator that will process the input rows. """
+        arg_obj = self
+        #in_row_terminator = arg_obj.in_row_terminator
+        out_row_terminator = arg_obj.out_row_terminator
+        in_row_offset_start = arg_obj.in_row_offset_start
+        in_row_count_max = arg_obj.in_row_count_max
+        out_row_count_max = arg_obj.out_row_count_max
 
-def execute(
-    in_csv
-    ,out_csv
-    ,input_row_terminator
-    ,output_row_terminator
-    ,in_row_offset_start
-    ,in_row_count_max
-    ,out_row_count_max
-):
-    exit_code = 0
-    end_row = None
-    cr_newline = '\r'
-    lf_newline = '\n'
-    crlf_newline = '\r\n'
-    out_newline = output_row_terminator
-    
-    in_row_count = 0
-    out_row_count = 0
-    in_row = next(in_csv, end_row)
-    while (end_row != in_row
-        and (None == in_row_count_max or in_row_count < in_row_count_max)
-        and (None == out_row_count_max or out_row_count < out_row_count_max)
-    ):
-        in_row_count += 1
-        if (in_row_offset_start < in_row_count):
-            out_row = list(in_row)
-            column_count = len(out_row)
-            column_position = 0
-            while (column_position < column_count):
-                cell_value = out_row[column_position]
-                # fix newline characters in the data
-                # (some tools - like postgres - can't handle mixed newline chars)
-                if (None != cell_value):
-                    # replace crlf with lf, then we will replace lf's with the output newline,
-                    #  this prevents us from turning a crlf into a double newline
-                    cell_value = cell_value.replace(crlf_newline, lf_newline)
-                    cell_value = cell_value.replace(cr_newline, lf_newline)
-                    cell_value = cell_value.replace(lf_newline, out_newline)
-                    out_row[column_position] = cell_value
-                column_position += 1
-            out_csv.writerow(out_row)
-            out_row_count += 1
-        in_row = next(in_csv, end_row)
-    return exit_code
+        cr_newline = '\r'
+        lf_newline = '\n'
+        crlf_newline = '\r\n'
+        out_newline = out_row_terminator
 
-# console_main() is the main entry point when invoked from an executable wrapper.
+        in_row_count = 0
+        out_row_count = 0
+        for in_row in rows:
+            if in_row_count_max is not None and in_row_count_max <= in_row_count:
+                break
+            elif out_row_count_max is not None and out_row_count_max <= out_row_count:
+                break
+            in_row_count += 1
+            if in_row_offset_start < in_row_count:
+                out_row = list(in_row)
+                column_count = len(out_row)
+                for column_position in irange(column_count):
+                    cell_value = out_row[column_position]
+                    # fix newline characters in the data
+                    # (some tools - like postgres - can't handle mixed newline chars)
+                    if cell_value is not None:
+                        # replace crlf with lf, then we will replace lf's with the output newline,
+                        #  this prevents us from turning a crlf into a double newline
+                        cell_value = cell_value.replace(crlf_newline, lf_newline)
+                        cell_value = cell_value.replace(cr_newline, lf_newline)
+                        cell_value = cell_value.replace(lf_newline, out_newline)
+                        out_row[column_position] = cell_value
+                yield out_row
+                out_row_count += 1
+
+
+def main(argv, in_io, out_io, err_io):
+    """ Main entry point for program. """
+    exe = CsvTranslateProcessor()
+    return exe.main(argv, in_io, out_io, err_io)
+
+
 def console_main():
+    """ Main entry point when invoked from executable wrapper. """
     return main(sys.argv, sys.stdin, sys.stdout, sys.stderr)
 
-        
+
 if __name__ == "__main__":
     sys.exit(console_main())
