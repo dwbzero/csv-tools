@@ -104,6 +104,8 @@ def main(argv, in_io, out_io, err_io):
         from .csv_rejoin import main as cmd_main
     elif cmd_name == "row2col":
         from .csv_row2col import main as cmd_main
+    elif cmd_name == "rowcalc":
+        from .csv_rowcalc import main as cmd_main
     elif cmd_name == "rownum":
         from .csv_rownum import main as cmd_main
     elif cmd_name == "select":

@@ -58,8 +58,7 @@ class CsvCountProcessor(CsvTranslateProcessor):
 
     def parse_args(self, argv):
         """ Override to parse custom args. """
-        super(CsvCountProcessor, self).parse_args(argv)
-        arg_obj = self
+        arg_obj = super(CsvCountProcessor, self).parse_args(argv)
         if arg_obj.should_print_custom_count:
             if arg_obj.should_print_row_count is None:
                 arg_obj.should_print_row_count = False
@@ -71,6 +70,7 @@ class CsvCountProcessor(CsvTranslateProcessor):
             arg_obj.should_print_row_count = True
             arg_obj.should_print_column_count = True
             arg_obj.should_print_cell_count = True
+        return arg_obj
 
     def process(self, rows):
         """ Read rows and count them. """
