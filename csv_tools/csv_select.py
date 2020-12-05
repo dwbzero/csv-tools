@@ -4,7 +4,6 @@
 help_text = (
     "CSV-SELECT tool version 20170220:20190510\n"
     "Selects a subset of columns from a CSV file\n"
-    "Copyright (c) 2017-2019 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-select [OPTIONS] Columns [InputFile]\n"
     "\n"

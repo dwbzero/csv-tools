@@ -7,7 +7,6 @@
 help_text = (
     "CSV-PREPEND tool version 20170918\n"
     "Insert a header row into a CSV stream\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-prepend [OPTIONS] ColumnValueList [InputFile]\n"
     "\n"

@@ -4,7 +4,6 @@
 help_text = (
     "CSV-ROWCALC tool version 20170217:20190506\n"
     "Executes a custom python script on each row of a CSV file\n"
-    "Copyright (c) 2017-2019 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-rowcalc [OPTIONS] ScriptFile [CsvInputFile]\n"
     "\n"

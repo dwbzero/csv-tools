@@ -8,7 +8,6 @@ from .csv_translate import CsvTranslateProcessor
 
 HELP_TEXT = """{program_name} tool version 20170602:20200516
 Counts CSV rows and cells
-Copyright (c) 2017-2020 Upstream Research, Inc.  All Rights Reserved.
 
 {program_name} [OPTIONS] [InputFile]
 

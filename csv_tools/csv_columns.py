@@ -4,7 +4,6 @@
 help_text = (
     "CSV-COLUMNS tool version 20160919:20200516\n"
     "Print column names and transpose delimited text encodings\n"
-    "Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-columns [OPTIONS] [InputFile]\n"
     "\n"

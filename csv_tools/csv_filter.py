@@ -7,7 +7,6 @@
 help_text = (
     "CSV-FILTER tool version 20170330\n"
     "Selects rows from a CSV file\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-filter [OPTIONS] FilterArguments... [InputFile]\n"
     "\n"

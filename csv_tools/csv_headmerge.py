@@ -7,7 +7,6 @@
 help_text = (
     "CSV-HEADMERGE tool version 20170609\n"
     "Merge multiple CSV header rows into one\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-headmerge [OPTIONS] [InputFile]\n"
     "\n"

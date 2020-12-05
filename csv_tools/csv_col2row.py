@@ -7,7 +7,6 @@
 help_text = (
     "CSV-COL2ROW tool version 20170920\n"
     "Transposes a subset of named CSV columns into rows\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-col2row [OPTIONS] OutNameColumn OutValueColumn InColumnList [InputFile]\n"
     "\n"

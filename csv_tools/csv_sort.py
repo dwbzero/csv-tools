@@ -7,7 +7,6 @@
 help_text = (
     "CSV-SORT tool version 20170919\n"
     "Sort rows in a CSV file\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-sort [OPTIONS] ColumnList [InputFile]\n"
     "\n"

@@ -7,7 +7,6 @@
 help_text = (
     "CSV-TAIL tool version 20170609:20170920\n"
     "Filter the last rows of a CSV stream\n"
-    "Copyright (c) 2016-2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-tail [OPTIONS] [InputFile]\n"
     "\n"

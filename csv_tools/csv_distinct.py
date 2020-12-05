@@ -4,7 +4,6 @@
 help_text = (
     "CSV-DISTINCT tool version 20160927:20170512\n"
     "Find distinct cell values in a column of a CSV file\n"
-    "Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-distinct [OPTIONS] SourceColumns [InputFile]\n"
     "\n"

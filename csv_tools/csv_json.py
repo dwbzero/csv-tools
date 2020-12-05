@@ -7,7 +7,6 @@
 help_text = (
     "CSV-JSON tool version 20170215\n"
     "Translates between CSV and JSON\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-json [OPTIONS] PropertyList [InputFile]\n"
     "\n"

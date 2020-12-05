@@ -4,7 +4,6 @@
 help_text = (
     "CSV-ROW2COL tool version 20170921\n"
     "Transpose named rows into columns\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-row2col [OPTIONS] EACH NameColumn GROUP BY GroupColumns [InputFile]\n"
     "csv-row2col [OPTIONS] EACH NameColumn EXPAND ExpansionColumns [InputFile]\n"

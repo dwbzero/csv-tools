@@ -9,7 +9,6 @@
 help_text = (
     "CSV-JOIN tool version 20170524\n"
     "Joins two CSV files on common column values\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-join [OPTIONS] {INNER|OUTER} File2 Columns2 '=' Columns1 [File1]\n"
     "\n"

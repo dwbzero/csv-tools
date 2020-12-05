@@ -4,7 +4,6 @@
 help_text = (
     "CSV-PRINT tool version 20170220:20170605\n"
     "Prints a fixed-width representation of a CSV file\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-print [OPTIONS] [InputFile]\n"
     "\n"

@@ -4,7 +4,6 @@
 help_text = (
     "CSV-ROWNUM tool version 20160921:20170215\n"
     "Add a row number column to a CSV file\n"
-    "Copyright (c) 2016 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-rownum [OPTIONS] [InputFile]\n"
     "\n"

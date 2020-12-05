@@ -1,3 +1,6 @@
+##  Copyright (c) 2020 Upstream Research, Inc.  All Rights Reserved.  ##
+##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
+
 """ Top-level command driver module to execute csv subprograms. 
 
     Implemented as a module so that it can be wrapped in an executable.

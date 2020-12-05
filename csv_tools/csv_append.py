@@ -7,7 +7,6 @@
 help_text = (
     "CSV-APPEND tool version 20170602\n"
     "Appends a CSV file to a CSV stream with matching columns.\n"
-    "Copyright (c) 2017 Upstream Research, Inc.  All Rights Reserved.\n"
     "\n"
     "csv-append [OPTIONS] AppendFile1\n"
     "csv-append [OPTIONS] InputFile AppendFile1 [AppendFile2...]\n"
