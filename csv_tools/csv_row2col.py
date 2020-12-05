@@ -12,7 +12,7 @@ help_text = (
     "    -o {F}  Output file name\n"
     "    --ignore-case   Ignore character case when comparing values\n"
     "\n"
-    "GroupColumns and ExpansionColuns are each a comma-separated list of \n"
+    "GroupColumns and ExpansionColumns are each a comma-separated list of \n"
     "column names found in the input stream.\n"
     "\n"
     "If GroupColumns is not specified, then the GroupColumns will be \n"
