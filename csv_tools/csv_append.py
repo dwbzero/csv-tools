@@ -5,14 +5,15 @@
 ## python 2 does not work due mostly to issues with csv and io modules with unicode data
 
 help_text = (
-    "CSV-APPEND tool version 20170602\n"
+    "CSV-APPEND tool version 20170602:20200715\n"
     "Appends a CSV file to a CSV stream with matching columns.\n"
     "\n"
     "csv-append [OPTIONS] AppendFile1\n"
     "csv-append [OPTIONS] InputFile AppendFile1 [AppendFile2...]\n"
     "\n"
     "OPTIONS\n"
-    "    -o {F}  Output file name\n"
+    "    -F {S}  Name of column where file name should be saved.\n"
+    "    -o {F}  Output file name.\n"
     "\n"
     "Appends the non-header rows of one or more CSV files to the end\n"
     "of a CSV input stream, cells in the append files are matched to the\n"
@@ -55,6 +56,9 @@ def main(arg_list, stdin, stdout, stderr):
     input_row_start_offset = 0
     input_row_count_max = None
     output_row_count_max = None
+    per_file_row_count_max = None
+    input_file_column_name = None
+    err_msg = None
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -146,6 +150,22 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
+        elif (arg == "-F"
+          or arg == "--file-column"
+          ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                input_file_column_name = arg
+        elif (arg == "-m"
+          or arg == "--rows-per-file"
+          ):
+            if (arg_index < arg_count):
+                arg_index += 1
+                arg = arg_list[arg_index]
+                per_file_row_count_max = int(arg)
+        elif (arg.startswith("-") and arg != "-"):
+            err_msg = "unknown option: " + arg
         elif (None != arg
           and 0 < len(arg)
           ):
@@ -155,9 +175,12 @@ def main(arg_list, stdin, stdout, stderr):
     if (0 >= len(input_file_name_list)):
         show_help = True
 
+    if (err_msg is not None):
+        err_io.write(err_msg)
+        err_io.write("\n")
     if (show_help):
         out_io.write(help_text)
-    else:
+    elif (err_msg is None):
         # if only one input file is provided, then use STDIN,
         # if multiple input files are specified, then the main file will be the first one.
         # if the name of the first file is '-' then read the main file from STDIN
@@ -245,6 +268,10 @@ def main(arg_list, stdin, stdout, stderr):
                 ,input_file_name_list
                 ,open_csv_input_file
                 ,create_csv_reader
+                ,output_row_count_max
+                ,input_file_name
+                ,input_file_column_name
+                ,per_file_row_count_max
                 )
         except BrokenPipeError:
             pass
@@ -260,6 +287,10 @@ def execute(
     ,in_append_file_name_list
     ,open_csv_input_file
     ,create_csv_reader
+    ,out_row_count_max
+    ,in_file_name
+    ,input_file_column_name
+    ,per_file_row_count_max
 ):
     end_row = None
     in_row_count = 0
@@ -268,21 +299,59 @@ def execute(
     
 
     # copy all input rows from the main stream directly to the output stream
+    # find the "file name" column, if it exists
+    input_file_column_position = -1
     in_header_row = next(in_csv, end_row)
     if (end_row != in_header_row):
-        out_header_row = list(in_header_row)
+        out_header_row = list()
+        if input_file_column_name is not None:
+            input_file_column_name_norm = normalize_column_name(input_file_column_name)
+            in_column_count = len(in_header_row)
+            in_column_position = 0
+            input_file_column_position = -1
+            while (0 > input_file_column_position
+                and in_column_position < in_column_count
+            ):
+                in_column_name = in_header_row[in_column_position]
+                in_column_name_norm = normalize_column_name(in_column_name)
+                if in_column_name_norm == input_file_column_name_norm:
+                    input_file_column_position = in_column_position
+                in_column_position += 1
+            if (0 > input_file_column_position):
+                out_header_row.append(input_file_column_name)
+                input_file_column_position = 0
+        out_header_row.extend(in_header_row)
         out_column_name_list = out_header_row
         out_csv.writerow(out_header_row)
         in_row = next(in_csv, end_row)
-    while (end_row != in_row):
+    # dump input file to output stream,
+    #  add file name column if available:
+    file_row_count = 0
+    while (end_row != in_row
+        and (out_row_count_max is None or out_row_count_max > out_row_count)
+        and (per_file_row_count_max is None or per_file_row_count_max > file_row_count)
+    ):
         in_row_count += 1
-        out_row = in_row
+        if (0 > input_file_column_position):
+            out_row = in_row
+        else:
+            out_row = list()
+            out_row.append(in_file_name)
+            out_row.extend(in_row)
         out_csv.writerow(out_row)
         out_row_count += 1
+        file_row_count += 1
         in_row = next(in_csv, end_row)
-
-    for in_append_file_name in in_append_file_name_list:
+    
+    # process each append_file:
+    in_file_count = len(in_append_file_name_list)
+    in_file_position = 0
+    while (in_file_count > in_file_position
+        and (out_row_count_max is None or out_row_count_max > out_row_count)
+    ):
+        in_append_file_name = in_append_file_name_list[in_file_position]
         in_append_file = None
+        file_row_count = 0
         try:
             in_append_file = open_csv_input_file(in_append_file_name)
             in_append_csv = create_csv_reader(in_append_file)
@@ -313,17 +382,29 @@ def execute(
             in_row = end_row
             if (end_row != in_header_row):
                 in_row = next(in_append_csv, end_row)
-            while (in_row != end_row):
+            while (in_row != end_row
+                and (out_row_count_max is None or out_row_count_max > out_row_count)
+                and (per_file_row_count_max is None or per_file_row_count_max > file_row_count)
+            ):
                 in_row_count += 1
                 out_row = []
-                for in_column_position in out_append_column_position_list:
+                out_column_count = len(out_column_name_list)
+                out_column_position = 0
+                while (out_column_position < out_column_count):
+                    in_column_position = out_append_column_position_list[out_column_position]
                     out_cell_value = None
+                    if (0 <= input_file_column_position
+                        and input_file_column_position == out_column_position
+                    ):
+                        out_cell_value = in_append_file_name
                     if (0 <= in_column_position
                         and in_column_position < len(in_row)
                     ):
                         out_cell_value = in_row[in_column_position]
                     out_row.append(out_cell_value)
+                    out_column_position += 1
                 out_csv.writerow(out_row)
+                file_row_count += 1
                 out_row_count += 1
                 in_row = next(in_append_csv, end_row)
         except BrokenPipeError:
@@ -332,6 +413,7 @@ def execute(
             if (None != in_append_file):
                 in_append_file.close()
                 in_append_file = None
+        in_file_position += 1
 
     
 def normalize_column_name(in_column_name):
