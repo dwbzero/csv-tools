@@ -2,7 +2,7 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-ROW2COL tool version 20170921\n"
+    "CSV-ROW2COL tool version 20170921:20201208\n"
     "Transpose named rows into columns\n"
     "\n"
     "csv-row2col [OPTIONS] EACH NameColumn GROUP BY GroupColumns [InputFile]\n"
@@ -10,6 +10,7 @@ help_text = (
     "\n"
     "OPTIONS\n"
     "    -o {F}  Output file name\n"
+    "    -u      Name first expansion column exactly as value of NameColumn.\n"
     "    --ignore-case   Ignore character case when comparing values\n"
     "\n"
     "GroupColumns and ExpansionColumns are each a comma-separated list of \n"
@@ -71,6 +72,7 @@ def main(arg_list, stdin, stdout, stderr):
     in_group_column_name_list_str = None
     in_expand_column_name_list_str = None
     in_expand_column_name_template_str = "{0}_{1}"
+    should_not_suffix_first_expand_column = False
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -181,6 +183,8 @@ def main(arg_list, stdin, stdout, stderr):
                     output_row_count_max = int(arg)
         elif (arg == "--ignore-case"):
             should_ignore_case = True
+        elif (arg == "-u"):
+            should_not_suffix_first_expand_column = True
         elif (arg == "--column-format"):
             arg_index += 1
             if (arg_index < arg_count):
@@ -315,6 +319,7 @@ def main(arg_list, stdin, stdout, stderr):
                   ,out_csv
                   ,output_row_count_max
                   ,should_ignore_case
+                  ,should_not_suffix_first_expand_column
                   ,in_expand_column_name_template_str
                   ,in_name_column_name
                   ,in_group_column_name_list
@@ -337,6 +342,7 @@ def execute(
     ,out_csv
     ,out_row_count_max
     ,should_ignore_case
+    ,should_not_suffix_first_expand_column
     ,in_expand_column_name_template_str
     ,in_name_column_name
     ,in_group_column_name_list
@@ -517,10 +523,14 @@ def execute(
     # make the output column list using the group columns as the base
     #  and by "multiplying" the name column values by the expansion column names
     for name_value in name_value_list:
-        for expand_column_name in in_expand_column_name_list:
-            out_column_name = in_expand_column_name_template_str
-            out_column_name = out_column_name.replace("{1}", expand_column_name)
-            out_column_name = out_column_name.replace("{0}", name_value)
+        for pos, expand_column_name in enumerate(in_expand_column_name_list):
+            out_column_name = None
+            if pos == 0 and should_not_suffix_first_expand_column:
+                out_column_name = name_value
+            else:
+                out_column_name = in_expand_column_name_template_str
+                out_column_name = out_column_name.replace("{1}", expand_column_name)
+                out_column_name = out_column_name.replace("{0}", name_value)
             out_column_name_list.append(out_column_name)
 
     # write a header row
