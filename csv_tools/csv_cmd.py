@@ -23,10 +23,12 @@ COMMANDS:
     columns    : Transpose CSV rows and columns.  Print CSV column names.
     count      : Count rows, columns, and cells in a csv document.
     distinct   : Aggregate distinct column values of a CSV stream.
+    filejoin   : Join multiple files with common column schema.
     filter     : Basic row exclusion by a simple expression.
     headmerge  : Merge multi-line headers into a single header row.
     join       : Joinn CSV documents by common column values.
     json       : Convert between a simple JSON document and CSV.
+    ls         : Write a file listing in CSV format.
     prepend    : Insert rows at start of CSV stream.
     print      : Print CSV in fixed-width columns.
     rejoin     : Expand value lists embedded in a CSV columns into rows.
@@ -91,6 +93,8 @@ def main(argv, in_io, out_io, err_io):
         from .csv_count import main as cmd_main
     elif cmd_name == "distinct":
         from .csv_distinct import main as cmd_main
+    elif cmd_name == "filejoin":
+        from .csv_filejoin import main as cmd_main
     elif cmd_name == "filter":
         from .csv_filter import main as cmd_main
     elif cmd_name == "headmerge":
@@ -99,6 +103,8 @@ def main(argv, in_io, out_io, err_io):
         from .csv_join import main as cmd_main
     elif cmd_name == "json":
         from .csv_json import main as cmd_main
+    elif cmd_name == "ls":
+        from .csv_ls import main as cmd_main
     elif cmd_name == "prepend":
         from .csv_prepend import main as cmd_main
     elif cmd_name == "print":
