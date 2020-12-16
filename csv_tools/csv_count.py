@@ -36,7 +36,7 @@ class CsvCountProcessor(CsvTranslateProcessor):
     should_print_column_count = None
     help_text = HELP_TEXT
 
-    def parse_next(self, arg, arg_iter):
+    def parse_next_arg(self, arg, arg_iter):
         """ Override to parse custom args. """
         succeeded = True
         arg_obj = self
@@ -52,11 +52,11 @@ class CsvCountProcessor(CsvTranslateProcessor):
             arg_obj.should_print_custom_count = True
             arg_obj.should_print_cell_count = True
         else:
-            succeeded = super(CsvCountProcessor, self).parse_next(arg, arg_iter)
+            succeeded = super(CsvCountProcessor, self).parse_next_arg(arg, arg_iter)
         return succeeded
 
     def parse_args(self, argv):
-        """ Override to parse custom args. """
+        """ Override to evaluate custom args. """
         arg_obj = super(CsvCountProcessor, self).parse_args(argv)
         if arg_obj.should_print_custom_count:
             if arg_obj.should_print_row_count is None:

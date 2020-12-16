@@ -94,7 +94,7 @@ class CsvTranslateProcessor(object):
     def __init__(self):
         pass
 
-    def parse_next(self, arg, arg_iter):
+    def parse_next_arg(self, arg, arg_iter):
         """ Parse the next argument flag from an argument iterator.
 
             Returns True if the argument was parsed:
@@ -167,7 +167,7 @@ class CsvTranslateProcessor(object):
         program_path = next(arg_iter)
         arg_obj.program_name = os.path.basename(program_path)
         for arg in arg_iter:
-            if arg_obj.parse_next(arg, arg_iter):
+            if arg_obj.parse_next_arg(arg, arg_iter):
                 pass
             else:
                 raise LookupError("Unknown argument: " + arg)
@@ -188,10 +188,10 @@ class CsvTranslateProcessor(object):
         out_io.write(help_text)
 
     @contextmanager
-    def open_writer(self, out_io, err_io):
+    def open_writer(self, file_name, out_io, err_io):
         """ Open an output CSV writer. """
         arg_obj = self
-        out_file_name = arg_obj.out_file_name
+        out_file_name = file_name
         out_charset_name = arg_obj.out_charset_name
         out_charset_error_mode = arg_obj.out_charset_error_mode
         out_delimiter = arg_obj.out_delimiter
@@ -226,12 +226,12 @@ class CsvTranslateProcessor(object):
             out_file.close()
 
     @contextmanager
-    def open_reader(self, in_io, err_io):
+    def open_reader(self, file_name, in_io, err_io):
         """ Open an input CSV reader, and return an iterator that can read rows. """
         # set global CSV column width
         arg_obj = self
         csv_cell_width_limit = arg_obj.csv_cell_width_limit
-        in_file_name = arg_obj.in_file_name
+        in_file_name = file_name
         in_charset_name = arg_obj.in_charset_name
         in_charset_error_mode = arg_obj.in_charset_error_mode
         in_delimiter = arg_obj.in_delimiter
@@ -276,14 +276,11 @@ class CsvTranslateProcessor(object):
         exit_code = 0
         error_message = None
         try:
-            exe.parse_args(argv)
-            if exe.should_print_help:
+            arg_obj = exe.parse_args(argv)
+            if arg_obj.should_print_help:
                 exe.print_help(out_io)
             else:
-                with exe.open_reader(in_io, err_io) as in_csv:
-                    with exe.open_writer(out_io, err_io) as out_csv:
-                        for row in exe.process(in_csv):
-                            out_csv.writerow(row)
+                exit_code = exe.execute(arg_obj, in_io, out_io, err_io)
         except IOError as exc:
             if exc.errno == errno.EPIPE:
                 # (also BrokenPipeError python 3)
@@ -302,6 +299,16 @@ class CsvTranslateProcessor(object):
         if error_message:
             err_io.write("Error: {E}\n".format(E=error_message))
             exit_code = 1
+        return exit_code
+
+    def execute(self, arg_obj, in_io, out_io, err_io):
+        """ Execute the csv processing operation. """
+        exit_code = 0
+        exe = self
+        with exe.open_reader(arg_obj.in_file_name, in_io, err_io) as in_csv:
+            with exe.open_writer(arg_obj.out_file_name, out_io, err_io) as out_csv:
+                for row in exe.process(in_csv):
+                    out_csv.writerow(row)
         return exit_code
 
     def process(self, rows):
@@ -326,22 +333,23 @@ class CsvTranslateProcessor(object):
             elif out_row_count_max is not None and out_row_count_max <= out_row_count:
                 break
             in_row_count += 1
-            if in_row_offset_start < in_row_count:
-                out_row = list(in_row)
-                column_count = len(out_row)
-                for column_position in irange(column_count):
-                    cell_value = out_row[column_position]
-                    # fix newline characters in the data
-                    # (some tools - like postgres - can't handle mixed newline chars)
-                    if cell_value is not None:
-                        # replace crlf with lf, then we will replace lf's with the output newline,
-                        #  this prevents us from turning a crlf into a double newline
-                        cell_value = cell_value.replace(crlf_newline, lf_newline)
-                        cell_value = cell_value.replace(cr_newline, lf_newline)
-                        cell_value = cell_value.replace(lf_newline, out_newline)
-                        out_row[column_position] = cell_value
-                yield out_row
-                out_row_count += 1
+            if in_row_count <= in_row_offset_start:
+                continue
+            out_row = list(in_row)
+            column_count = len(out_row)
+            for column_position in irange(column_count):
+                cell_value = out_row[column_position]
+                # fix newline characters in the data
+                # (some tools - like postgres - can't handle mixed newline chars)
+                if cell_value is not None:
+                    # replace crlf with lf, then we will replace lf's with the output newline,
+                    #  this prevents us from turning a crlf into a double newline
+                    cell_value = cell_value.replace(crlf_newline, lf_newline)
+                    cell_value = cell_value.replace(cr_newline, lf_newline)
+                    cell_value = cell_value.replace(lf_newline, out_newline)
+                    out_row[column_position] = cell_value
+            yield out_row
+            out_row_count += 1
 
 
 def main(argv, in_io, out_io, err_io):
