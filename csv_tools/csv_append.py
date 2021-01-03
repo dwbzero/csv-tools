@@ -301,6 +301,7 @@ def execute(
     # copy all input rows from the main stream directly to the output stream
     # find the "file name" column, if it exists
     input_file_column_position = -1
+    in_row = end_row
     in_header_row = next(in_csv, end_row)
     if (end_row != in_header_row):
         out_header_row = list()
