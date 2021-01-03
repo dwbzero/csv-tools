@@ -2,21 +2,20 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-ROWCALC tool version 20170217:20190506\n"
+    "CSV-ROWCALC tool version 20170217:20201215\n"
     "Executes a custom python script on each row of a CSV file\n"
     "\n"
     "csv-rowcalc [OPTIONS] ScriptFile [CsvInputFile]\n"
     "\n"
     "OPTIONS\n"
     "    -a {S}  Comma separated list of additional columns to add to output\n"
-    "    -F {F}  Additional script file to include (option can be used multiple times)\n"
+    "    -I {F}  Additional script file to include (option can be used multiple times)\n"
     "    -K {N}  Number of non-header rows to skip (default=0)\n"
     "    -n {N}  Number of non-header rows to process from input (default=all)\n"
     "    -N {N}  Number of non-header rows to write to output (default=all)\n"
     "    -o {F}  Output file name\n"
     "    -X      Interpret the ScriptFile parameter as a Python statement (not a file name)\n"
     "    --row-var    {S}   Name of row map variable (default='row')\n"
-    "    --state-var  {S}   Name of state map variable (default='state')\n"
     "\n"
     "ScriptFile should be a Python script.  It will be executed once per row\n"
     "in a context with some predefined variables, including one called 'row'\n"
@@ -28,14 +27,6 @@ help_text = (
     "\n"
     "    row['GEOID'] = row['GEOID'].rjust(5,'0')\n"
     "\n"
-    "The script will also be given a 'state' map, which is preserved from row to row.\n"
-    "This allows the script to accumulate state information as it gets executed.\n"
-    "\n"
-    "For example, to make a 'row_offset' column, the script could be:\n"
-    "\n"
-    "    row_offset         = state.get('row_count', 0)\n"
-    "    row['row_offset']  = row_offset\n"
-    "    state['row_count'] = row_offset + 1\n"
 )
 
 import sys
@@ -76,7 +67,6 @@ def main(arg_list, stdin, stdout, stderr):
     extra_column_names_string = None
     row_var_name = 'row'
     row_offset_var_name = 'row_offset'
-    state_var_name = 'state'
     # [20160916 [db] I avoided using argparse in order to retain some flexibility for command syntax]
     arg_count = len(arg_list)
     arg_index = 1
@@ -202,11 +192,6 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 row_var_name = arg
-        elif (arg == "--state-var"):
-            if (arg_index < arg_count):
-                arg_index += 1
-                arg = arg_list[arg_index]
-                state_var_name = arg
         elif (arg == "-a"
           or arg == "--append-columns"
         ):
@@ -218,7 +203,7 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "--statement"
         ):
             script_arg_is_code = True
-        elif (arg == "-F"
+        elif (arg == "-I"
           or arg == "--include"
         ):
             if (arg_index < arg_count):
@@ -244,18 +229,12 @@ def main(arg_list, stdin, stdout, stderr):
     if (show_help):
         out_io.write(help_text)
     else:
-        # combine the include scripts first
-        # [20170531 [db] I tried to compile these separately
-        #   so that the include file line numbers would be preserved properly,
-        #   but I failed to find a way to execute the combined code,
-        #   so I fell back to simply concating all the code together and compiling it once.]
+        script_globals = dict()
         include_script_content = None
         for include_script_file_name in include_script_file_name_list:
             include_script_file_content = read_file_content(include_script_file_name)
-            if (None == include_script_content):
-                include_script_content = include_script_file_content
-            elif (None != include_script_file_content):
-                include_script_content += "\n" + include_script_file_content
+            include_script_code = compile(include_script_file_content, include_script_file_name, 'exec')
+            exec(include_script_code, script_globals)
 
         if (None != script_file_name
             and None == script_content
@@ -341,9 +320,9 @@ def main(arg_list, stdin, stdout, stderr):
                     ,input_row_count_max
                     ,output_row_count_max
                     ,script_compiled_code
+                    ,script_globals
                     ,extra_column_name_list
                     ,row_var_name
-                    ,state_var_name
                     ,row_offset_var_name
                     )
         except BrokenPipeError:
@@ -361,9 +340,9 @@ def execute(
     ,in_row_count_max
     ,out_row_count_max
     ,script_compiled_code
+    ,script_globals
     ,extra_column_name_list
     ,row_var_name
-    ,state_var_name
     ,row_offset_var_name
 ):
     end_row = None
@@ -387,7 +366,6 @@ def execute(
         in_row = next(in_csv, end_row)
 
     out_row_count = 0
-    state_dict = dict()
     while (end_row != in_row
         and (None == in_row_count_max or in_row_count < in_row_count_max)
         and (None == out_row_count_max or out_row_count < out_row_count_max)
@@ -409,9 +387,8 @@ def execute(
             row_dict[column_name] = default_cell_value
             column_position += 1
 
-        script_variables = dict()
+        script_variables = dict(script_globals)
         script_variables[row_var_name] = row_dict
-        script_variables[state_var_name] = state_dict
         script_variables[row_offset_var_name] = in_row_count
         exec(script_compiled_code, script_variables)
 
