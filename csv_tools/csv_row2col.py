@@ -2,14 +2,16 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-ROW2COL tool version 20170921:20201208\n"
+    "CSV-ROW2COL tool version 20170921:20201220\n"
     "Transpose named rows into columns\n"
     "\n"
     "csv-row2col [OPTIONS] EACH NameColumn GROUP BY GroupColumns [InputFile]\n"
     "csv-row2col [OPTIONS] EACH NameColumn EXPAND ExpansionColumns [InputFile]\n"
     "\n"
     "OPTIONS\n"
-    "    -o {F}  Output file name\n"
+    "    -l      Flush buffer after each line written.\n"
+    "    -N {N}  Read available Name values from the first N rows (default=ALL).\n"
+    "    -o {F}  Output file name.\n"
     "    -u      Name first expansion column exactly as value of NameColumn.\n"
     "    --ignore-case   Ignore character case when comparing values\n"
     "\n"
@@ -35,11 +37,19 @@ help_text = (
     "will produce the following columns:\n"
     "\n"
     "    state_code,2000_population,2010_population,2020_population\n"
+    "\n"
+    "Rows are read and grouped sequentially, whenever the group columns change\n"
+    "a new row will be written to the output stream.\n"
+    "By default, all rows are read into memory before writing the output\n"
+    "in order to discover the available \"name\" values.\n"
+    "Use the \"-N\" option to read only the first N rows when discovering\n"
+    "the available names.  This is useful for large datasets.\n"
 )
 
 import sys
 import csv
 import io
+from itertools import chain
 
 from ._csv_helpers import (
     decode_delimiter_name
@@ -49,6 +59,8 @@ from ._csv_helpers import (
 )
 
 def main(arg_list, stdin, stdout, stderr):
+    DEFAULT_BUFFERING=-1
+    LINE_BUFFERING=1
     in_io = stdin
     out_io = stdout
     err_io = stderr
@@ -57,6 +69,7 @@ def main(arg_list, stdin, stdout, stderr):
     output_file_name = None
     input_delimiter = ','
     output_delimiter = ','
+    output_buffering = DEFAULT_BUFFERING
     # 'std' will be translated to the standard line break decided by csv_helpers.decode_newline
     input_row_terminator = 'std'
     output_row_terminator = 'std'
@@ -65,6 +78,7 @@ def main(arg_list, stdin, stdout, stderr):
     output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    input_row_count_max = None
     output_row_count_max = None
     in_counter_column_name = None
     should_ignore_case = False
@@ -82,6 +96,10 @@ def main(arg_list, stdin, stdout, stderr):
           or arg == "-?"
           ):
             show_help = True
+        elif (arg == "-l"
+          or arg == "--line-buffering-out"
+          ):
+            output_buffering = LINE_BUFFERING
         elif (arg == "-F"
           or arg == "--counter-field"
           ):
@@ -171,6 +189,16 @@ def main(arg_list, stdin, stdout, stderr):
             if (arg_index < arg_count):
                 arg = arg_list[arg_index]
                 csv_cell_width_limit = int(arg)
+        elif (arg == "-N"
+            or arg == "--row-count-in"
+        ):
+            arg_index += 1
+            if (arg_index < arg_count):
+                arg = arg_list[arg_index]
+                if ('ALL' == arg.upper()):
+                    input_row_count_max = None
+                else:
+                    input_row_count_max = int(arg)
         elif (arg == "-n"
             or arg == "--row-count-out"
         ):
@@ -299,6 +327,7 @@ def main(arg_list, stdin, stdout, stderr):
                 ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
                 ,closefd=should_close_out_file
+                ,buffering=output_buffering
                 )
             if (should_close_out_file):
                 out_file = out_io
@@ -317,6 +346,7 @@ def main(arg_list, stdin, stdout, stderr):
                 execute(
                   in_csv
                   ,out_csv
+                  ,input_row_count_max
                   ,output_row_count_max
                   ,should_ignore_case
                   ,should_not_suffix_first_expand_column
@@ -340,6 +370,7 @@ def main(arg_list, stdin, stdout, stderr):
 def execute(
     in_csv
     ,out_csv
+    ,input_row_count_max
     ,out_row_count_max
     ,should_ignore_case
     ,should_not_suffix_first_expand_column
@@ -455,16 +486,16 @@ def execute(
                 in_name_column_position = in_column_position
             in_column_position += 1
 
-    # read over the whole dataset,
-    # build a dictionary of the group rows,
-    # a dictionary of the distinct values in the name column,
-    # and keep track of the named values for each row
-    if (0 < len(in_group_column_position_list)
-        and 0 < len(in_expand_column_position_list)
-        and None != in_name_column_position
-        ):
+    # Read over the the initial rows.
+    # Create a dictionary of the distinct values in the name column,
+    #  and keep track of the named values for each row:
+    in_row_list = []
+    if (in_name_column_position is not None):
+        in_row_count = 0
         in_row = next(in_csv, end_row)
-        while (end_row != in_row):
+        while (end_row != in_row
+                and (input_row_count_max is None or input_row_count_max > in_row_count)
+                ):
             in_name_value = None
             if (None != in_name_column_position
                 and in_name_column_position < len(in_row)
@@ -477,41 +508,8 @@ def execute(
             name_count += 1
             name_dict[in_name_value] = name_count
 
-            # collect the expansion column values for this row
-            expand_column_position = 0
-            expand_value_list = list()
-            while (expand_column_position < len(in_expand_column_position_list)):
-                in_column_position = in_expand_column_position_list[expand_column_position]
-                cell_value = None
-                if (None != in_column_position
-                    and in_column_position < len(in_row)
-                ):
-                    cell_value = in_row[in_column_position]
-                expand_value_list.append(cell_value)
-                expand_column_position += 1
-
-            # create a sub-row for the group column values in this row
-            group_column_position = 0
-            group_row = list()
-            while (group_column_position < len(in_group_column_position_list)):
-                in_column_position = in_group_column_position_list[group_column_position]
-                cell_value = None
-                if (None != in_column_position
-                    and in_column_position < len(in_row)
-                ):
-                    cell_value = in_row[in_column_position]
-                if (None != cell_value
-                    and should_ignore_case
-                    ):
-                    cell_value = cell_value.upper()
-                group_row.append(cell_value)
-                group_column_position += 1
-
-            group_row_key = tuple(group_row)
-            group_row_attributes = group_row_dict.get(group_row_key, dict())
-            group_row_attributes[in_name_value] = expand_value_list
-            group_row_dict[group_row_key] = group_row_attributes
-
+            in_row_list.append(in_row)
+            in_row_count += 1
             in_row = next(in_csv, end_row)
 
     # create a sorted list of the values from the name column,
@@ -537,24 +535,86 @@ def execute(
     out_row = list(out_column_name_list)
     out_csv.writerow(out_row)
 
-    # write out each of the group rows with expanded columns
+    # Read over the rows keeping track of a current group row,
+    #  when the group row doesn't match the input row, start a new group row.
+    group_row_key = None
+    group_row_attributes = None
     out_row_count = 0
-    for group_row_key, group_row_attributes in group_row_dict.items():
-        out_row = list(group_row_key)
-        for name_value in name_value_list:
-            expand_value_list = group_row_attributes.get(name_value,[])
-            expand_column_position = 0
-            while (expand_column_position < len(in_expand_column_position_list)):
-                expand_value = None
-                if (expand_column_position < len(expand_value_list)):
-                    expand_value = expand_value_list[expand_column_position]
-                out_row.append(expand_value)
-                expand_column_position += 1
-        if (None == out_row_count_max
-            or out_row_count < out_row_count_max
+    # Add a terminator row in order to ensure we print the last group:
+    terminator_row = []
+    in_csv = chain(in_row_list, in_csv, [terminator_row])
+    if (0 < len(in_group_column_position_list)
+        and 0 < len(in_expand_column_position_list)
+        and None != in_name_column_position
         ):
-            out_csv.writerow(out_row)
-        out_row_count += 1
+        in_row_count = 0
+        in_row = next(in_csv, end_row)
+        while (end_row != in_row
+            and (None == out_row_count_max or out_row_count < out_row_count_max)
+            ):
+            in_name_value = None
+            if (None != in_name_column_position
+                and in_name_column_position < len(in_row)
+            ):
+                in_name_value = in_row[in_name_column_position]
+            if (None == in_name_value):
+                in_name_value = ""
+
+            # collect the expansion column values for this row
+            expand_column_position = 0
+            expand_value_list = list()
+            while (expand_column_position < len(in_expand_column_position_list)):
+                in_column_position = in_expand_column_position_list[expand_column_position]
+                cell_value = None
+                if (None != in_column_position
+                    and in_column_position < len(in_row)
+                ):
+                    cell_value = in_row[in_column_position]
+                expand_value_list.append(cell_value)
+                expand_column_position += 1
+
+            # create a key sub-row for the group column values in this row
+            group_column_position = 0
+            row_key = list()
+            while (group_column_position < len(in_group_column_position_list)):
+                in_column_position = in_group_column_position_list[group_column_position]
+                cell_value = None
+                if (None != in_column_position
+                    and in_column_position < len(in_row)
+                ):
+                    cell_value = in_row[in_column_position]
+                if (None != cell_value
+                    and should_ignore_case
+                    ):
+                    cell_value = cell_value.upper()
+                row_key.append(cell_value)
+                group_column_position += 1
+            # Convert to tuple for deep comparison:
+            row_key = tuple(row_key)
+
+            out_row = None
+            if (row_key != group_row_key):
+                if (group_row_key is not None):
+                    # Create a new ouput row:
+                    out_row = list(group_row_key)
+                    for name_value in name_value_list:
+                        expand_value_list = group_row_attributes.get(name_value,[])
+                        expand_column_position = 0
+                        while (expand_column_position < len(in_expand_column_position_list)):
+                            expand_value = None
+                            if (expand_column_position < len(expand_value_list)):
+                                expand_value = expand_value_list[expand_column_position]
+                            out_row.append(expand_value)
+                            expand_column_position += 1
+                    out_csv.writerow(out_row)
+                    out_row_count += 1
+                # Update our "current" group row information:
+                group_row_key = row_key
+                group_row_attributes = dict()
+            # Remember list of expand values for the current named row:
+            group_row_attributes[in_name_value] = expand_value_list
+            in_row_count += 1
+            in_row = next(in_csv, end_row)
 
 
 def console_main():
