@@ -2,13 +2,14 @@
 ##  Subject to an 'MIT' License.  See LICENSE file in top-level directory  ##
 
 help_text = (
-    "CSV-SELECT tool version 20170220:20190510\n"
+    "CSV-SELECT tool version 20170220:20201220\n"
     "Selects a subset of columns from a CSV file\n"
     "\n"
     "csv-select [OPTIONS] Columns [InputFile]\n"
     "\n"
     "OPTIONS\n"
     "    -o {F}  Output file name\n"
+    "    -l      Flush each line immediately to output\n"
     "    -T {S}  Column name delimiter (default=,)\n"
     "    -U {S}  Column name quote character (default=\")\n"
     "    -X      Exclude the named columns instead of including them\n"
@@ -50,6 +51,8 @@ from ._csv_helpers import (
     )
 
 def main(arg_list, stdin, stdout, stderr):
+    DEFAULT_BUFFERING = -1
+    LINE_BUFFERING = 1
     in_io = stdin
     out_io = stdout
     err_io = stderr
@@ -69,6 +72,7 @@ def main(arg_list, stdin, stdout, stderr):
     output_charset_error_mode = 'strict'
     input_charset_error_mode = 'strict'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    output_buffering = DEFAULT_BUFFERING
     column_name_list_string = None
     column_name_list_delimiter = ','
     column_name_list_quote_symbol = '"'
@@ -89,6 +93,10 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_file_name = arg
+        elif (arg == "-l"
+          or arg == "--line-buffering-out"
+          ):
+            output_buffering = LINE_BUFFERING
         elif (arg == "-E"
           or arg == "--charset-in"
           or arg == "--encoding-in"
@@ -305,6 +313,7 @@ def main(arg_list, stdin, stdout, stderr):
                 ,encoding=output_charset_name
                 ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
+                ,buffering=output_buffering
                 ,closefd=out_close_file
                 )
             if (out_close_file):
