@@ -1,6 +1,7 @@
 """ CSV wrapper objects. """
 
 import codecs
+from contextlib import contextmanager
 import csv
 import io
 import os
@@ -8,7 +9,6 @@ import os
 from .pyver import PY3
 
 
-DEFAULT_CHARSET = "utf-8"
 CSV_CHARSET = "utf-8"
 
 
@@ -205,6 +205,9 @@ class CsvRecoder:
     def __iter__(self):
         return self
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
         line_ustr = self.in_iter.next()
         return line_ustr.encode(self.encoding)
@@ -231,6 +234,9 @@ class UnicodeCsvReader:
     def __iter__(self):
         return self
 
+    def __next__(self):
+        return self.next()
+
 
 class UnicodeCsvWriter:
     """ Wraps a csv.writer to write to a unicode stream. """
@@ -239,7 +245,10 @@ class UnicodeCsvWriter:
             self,
             out_io,
             **kwargs):
-        from cStringIO import StringIO
+        if PY3:
+            from io import StringIO
+        else:
+            from cStringIO import StringIO
         self.buf_io = StringIO()
         self.writer = csv.writer(self.buf_io, **kwargs)
         self.out_io = out_io
@@ -263,3 +272,114 @@ else:
     CsvReader = UnicodeCsvReader
     CsvWriter = UnicodeCsvWriter
 
+
+@contextmanager
+def open_csv_reader(
+        in_io,
+        file_name,
+        encoding=None,
+        errors=None,
+        delimiter=None,
+        lineterminator=None,
+        quotechar=None,
+        csv_cell_width_limit=None,
+        buffering=None,
+        ):
+    """ High-level function to open a CSV reader.
+    
+        If file_name is None, then in_io will be used.
+    """
+    DEFAULT_BUFFERING = -1
+    delimiter = delimiter or ','
+    quotechar = quotechar or '"'
+    encoding = encoding or 'utf_8_sig'
+    # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    errors = errors or 'strict'
+    # python default is 131072 = 0x00020000
+    csv_cell_width_limit = csv_cell_width_limit or 4*1024*1024
+    buffering = buffering if buffering is not None else DEFAULT_BUFFERING
+
+    set_global_csv_field_size_limit(csv_cell_width_limit)
+
+    read_text_io_mode = 'r'
+    in_file_id = file_name
+    should_close_in_file = True
+    if not in_file_id:
+        in_file_id = in_io.fileno()
+        should_close_in_file = False
+    in_io = csv_open(
+        in_file_id,
+        mode=read_text_io_mode,
+        encoding=encoding,
+        errors=errors,
+        buffering=buffering,
+        closefd=should_close_in_file,
+        )
+    in_file_io = None
+    if should_close_in_file:
+        in_file_io = in_io
+
+    in_csv = CsvReader(
+        in_io,
+        delimiter=delimiter,
+        lineterminator=lineterminator,
+        quotechar=quotechar,
+        )
+    # @contextmanager: enter: yield this object to the with statement:
+    yield in_csv
+    # @contextmanager: exit: after the yield close the stream:
+    if in_file_io:
+        in_file_io.close()
+
+
+@contextmanager
+def open_csv_writer(
+        out_io,
+        file_name,
+        encoding=None,
+        errors=None,
+        delimiter=None,
+        lineterminator=None,
+        quotechar=None,
+        buffering=None,
+        ):
+    """ Basic function to open a CSV writer with various options. 
+    
+        If file_name is None, then out_io will be used as the underlying stream.
+    """
+    DEFAULT_BUFFERING = -1
+    delimiter = delimiter or ','
+    quotechar = quotechar or '"'
+    encoding = encoding or 'utf_8'
+    # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
+    errors = errors or 'strict'
+    buffering = buffering if buffering is not None else DEFAULT_BUFFERING
+
+    write_text_io_mode = 'w'
+    out_file_id = file_name
+    should_close_out_file = True
+    if not out_file_id:
+        out_file_id = out_io.fileno()
+        should_close_out_file = False
+    out_io = csv_open(
+        out_file_id,
+        mode=write_text_io_mode,
+        encoding=encoding,
+        errors=errors,
+        buffering=buffering,
+        closefd=should_close_out_file,
+        )
+    out_file_io = None
+    if should_close_out_file:
+        out_file_io = out_io
+    out_csv = CsvWriter(
+        out_io,
+        delimiter=delimiter,
+        lineterminator=lineterminator,
+        quotechar=quotechar,
+        )
+    # @contextmanager: enter: yield this object to the with statement:
+    yield out_csv
+    # @contextmanager: exit: after the yield close the stream:
+    if out_file_io:
+        out_file_io.close()

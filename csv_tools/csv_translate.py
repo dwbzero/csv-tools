@@ -11,20 +11,28 @@
 # Eventually, some of this code may need to be refactored
 #  into a more basic class.
 
-
-from contextlib import contextmanager
 import errno
 import os
 import sys
 
-from .base.pyver import irange
-from .base import csv2
-from .base.csv2 import (
-    lookup_delimiter,
-    lookup_charset,
-    lookup_newline,
-    lookup_quote_symbol,
-    )
+# This conditional statement allows you to start csv_translate in several ways:
+#  directly: > python csv_translate.py
+#  indirectly when used by another script: > python csv_count.py
+#  indirectly when used as a submodule: > python csvf.py translate
+if __name__ in ("__main__", "csv_translate"):
+    from base.pyver import irange
+    from base import csv2
+else: # if __name__ == "csvtools.csv_translate":
+    from .base.pyver import irange
+    from .base import csv2
+
+lookup_delimiter = csv2.lookup_delimiter
+lookup_charset = csv2.lookup_charset
+lookup_newline = csv2.lookup_newline
+lookup_quote_symbol = csv2.lookup_quote_symbol
+open_csv_reader = csv2.open_csv_reader
+open_csv_writer = csv2.open_csv_writer
+
 
 HELP_TEXT = """{program_name} tool version 20160916:20200516
 Translates delimited text encodings
@@ -32,9 +40,13 @@ Translates delimited text encodings
 {program_name} [OPTIONS] [InputFile]
 
 OPTIONS
+    -b {N}  Set output buffer size bytes
+    -B {N}  Set input buffer size in bytes
     -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')
     -e {E}  Output file text encoding (e.g. 'utf-8', 'windows-1252')
     -K {N}  Number of rows to skip from the input (default=0)
+    -l      Flush buffer after each line written
+    -L      Read data in line-buffer mode
     -N {N}  Maximum number of rows to read (default=ALL)
     -n {N}  Maximum number of rows to write (default=ALL)
     -o {F}  Output file name
@@ -63,6 +75,8 @@ as well as 'sys', 'std', 'mac', 'unix', 'dos'.
 'std' will let this tool to decide what to use.
 """
 
+
+
 class CsvTranslateProcessor(object):
     """ Implements a CSV format translator.
 
@@ -70,12 +84,16 @@ class CsvTranslateProcessor(object):
         csv processing tools.
     """
     program_name = "{csv_processor}"
+    DEFAULT_BUFFERING = -1
+    LINE_BUFFERING = 1
     exit_code = 0
     help_text = HELP_TEXT
     should_print_help = False
     #error_message = None
     in_file_name = None
     out_file_name = None
+    in_buffering = DEFAULT_BUFFERING
+    out_buffering = DEFAULT_BUFFERING
     in_delimiter = ','
     in_quote_symbol = '"'
     out_delimiter = ','
@@ -94,7 +112,70 @@ class CsvTranslateProcessor(object):
     def __init__(self):
         pass
 
-    def parse_next_arg(self, arg, arg_iter):
+    def parse_next_input_stream_arg(self, arg_obj, arg, arg_iter):
+        """ Parse the next argument flag from an argument iterator.
+        """
+        succeeded = True
+        if arg in ("-B", "--buffer-size-in"):
+            arg_obj.in_buffering = int(next(arg_iter))
+        elif arg in ("-E", "--encoding-in", "--charset-in"):
+            arg_obj.in_charset_name = next(arg_iter)
+        elif arg in ("-L", "--line-buffering-in"):
+            arg_obj.in_buffering = self.LINE_BUFFERING
+        elif arg in ("-K", "--row-offset-in", "--offset", "--skip"):
+            arg_obj.in_row_offset_start = int(next(arg_iter))
+        elif arg in ("-N", "--row-count-in"):
+            arg = next(arg_iter)
+            row_count = None
+            if arg.upper() != 'ALL':
+                row_count = int(arg)
+            arg_obj.in_row_count_max = row_count
+        elif arg in ("-Q", "--quote-in"):
+            arg_obj.in_quote_symbol = next(arg_iter)
+        elif arg in ("-S", "--separator-in", "--delimiter-in"):
+            arg_obj.in_delimiter = next(arg_iter)
+        elif arg in ("-W", "--terminator-in", "--newline-in", "--endline-in"):
+            arg_obj.in_row_terminator = next(arg_iter)
+        elif arg in ("--charset-in-error-mode",):
+            arg_obj.in_charset_error_mode = next(arg_iter)
+        elif arg in ("--cell-width-limit",):
+            arg_obj.csv_cell_width_limit = int(next(arg_iter))
+        else:
+            succeeded = False
+        return succeeded
+
+    def parse_next_output_stream_arg(self, arg_obj, arg, arg_iter):
+        """ Parse the next argument flag from an argument iterator.
+        """
+        succeeded = True
+        if arg in ("-o", "--output"):
+            arg_obj.out_file_name = next(arg_iter)
+        elif arg in ("-b", "--buffer-size-out"):
+            arg_obj.out_buffering = int(next(arg_iter))
+        elif arg in ("-e", "--encoding-out", "--charset-out"):
+            arg_obj.out_charset_name = next(arg_iter)
+        elif arg in ("-l", "--line-buffering-out"):
+            arg_obj.out_buffering = self.LINE_BUFFERING
+        elif arg in ("-n", "--row-count-out"):
+            arg = next(arg_iter)
+            row_count = None
+            if arg.upper() != 'ALL':
+                row_count = int(arg)
+            arg_obj.out_row_count_max = row_count
+        elif arg in ("-q", "--quote-out"):
+            arg_obj.out_quote_symbol = next(arg_iter)
+        elif arg in ("-s", "--separator-out", "--delimiter-out"):
+            arg_obj.out_delimiter = next(arg_iter)
+        elif arg in ("-w", "--terminator-out", "--newline-out", "--endline-out"):
+            arg_obj.out_row_terminator = next(arg_iter)
+        elif arg in ("--charset-out-error-mode",):
+            arg_obj.out_charset_error_mode = next(arg_iter)
+        else:
+            succeeded = False
+        return succeeded
+
+
+    def parse_next_arg(self, arg_obj, arg, arg_iter):
         """ Parse the next argument flag from an argument iterator.
 
             Returns True if the argument was parsed:
@@ -105,51 +186,16 @@ class CsvTranslateProcessor(object):
             according to any other parsing rules it may have.
         """
         succeeded = True
-        arg_obj = self
         if arg in ("--help", "-?"):
             arg_obj.should_print_help = True
-        elif arg in ("-o", "--output"):
-            arg_obj.out_file_name = next(arg_iter)
-        elif arg in ("-E", "--encoding-in", "--charset-in"):
-            arg_obj.in_charset_name = next(arg_iter)
-        elif arg in ("-e", "--encoding-out", "--charset-out"):
-            arg_obj.out_charset_name = next(arg_iter)
-        elif arg in ("--charset-in-error-mode",):
-            arg_obj.in_charset_error_mode = next(arg_iter)
-        elif arg in ("--charset-out-error-mode",):
-            arg_obj.out_charset_error_mode = next(arg_iter)
+        elif self.parse_next_input_stream_arg(arg_obj, arg, arg_iter):
+            pass
+        elif self.parse_next_output_stream_arg(arg_obj, arg, arg_iter):
+            pass
         elif arg in ("--charset-error_mode",):
             error_mode = next(arg_iter)
             arg_obj.in_charset_error_mode = error_mode
             arg_obj.out_charset_error_mode = error_mode
-        elif arg in ("-S", "--separator-in", "--delimiter-in"):
-            arg_obj.in_delimiter = next(arg_iter)
-        elif arg in ("-s", "--separator-out", "--delimiter-out"):
-            arg_obj.out_delimiter = next(arg_iter)
-        elif arg in ("-Q", "--quote-in"):
-            arg_obj.in_quote_symbol = next(arg_iter)
-        elif arg in ("-q", "--quote-out"):
-            arg_obj.out_quote_symbol = next(arg_iter)
-        elif arg in ("-W", "--terminator-in", "--newline-in", "--endline-in"):
-            arg_obj.in_row_terminator = next(arg_iter)
-        elif arg in ("-w", "--terminator-out", "--newline-out", "--endline-out"):
-            arg_obj.out_row_terminator = next(arg_iter)
-        elif arg in ("--cell-width-limit",):
-            arg_obj.csv_cell_width_limit = int(next(arg_iter))
-        elif arg in ("-K", "--row-offset-in", "--offset", "--skip"):
-            arg_obj.in_row_offset_start = int(next(arg_iter))
-        elif arg in ("-N", "--row-count-in"):
-            arg = next(arg_iter)
-            row_count = None
-            if arg.upper() != 'ALL':
-                row_count = int(arg)
-            arg_obj.in_row_count_max = row_count
-        elif arg in ("-n", "--row-count-out"):
-            arg = next(arg_iter)
-            row_count = None
-            if arg.upper() != 'ALL':
-                row_count = int(arg)
-            arg_obj.out_row_count_max = row_count
         elif arg.startswith("-"):
             succeeded = False
         elif arg_obj.in_file_name is None:
@@ -167,7 +213,7 @@ class CsvTranslateProcessor(object):
         program_path = next(arg_iter)
         arg_obj.program_name = os.path.basename(program_path)
         for arg in arg_iter:
-            if arg_obj.parse_next_arg(arg, arg_iter):
+            if arg_obj.parse_next_arg(arg_obj, arg, arg_iter):
                 pass
             else:
                 raise LookupError("Unknown argument: " + arg)
@@ -187,90 +233,32 @@ class CsvTranslateProcessor(object):
         help_text = self.help_text.replace("{program_name}", self.program_name)
         out_io.write(help_text)
 
-    @contextmanager
-    def open_writer(self, file_name, out_io, err_io):
-        """ Open an output CSV writer. """
-        arg_obj = self
-        out_file_name = file_name
-        out_charset_name = arg_obj.out_charset_name
-        out_charset_error_mode = arg_obj.out_charset_error_mode
-        out_delimiter = arg_obj.out_delimiter
-        out_row_terminator = arg_obj.out_row_terminator
-        out_quote_symbol = arg_obj.out_quote_symbol
-        out_file = None
-        write_text_io_mode = 'w'
-        out_file_id = out_file_name
-        should_close_out_file = True
-        if not out_file_id:
-            out_file_id = out_io.fileno()
-            should_close_out_file = False
-        out_io = csv2.csv_open(
-            out_file_id,
-            mode=write_text_io_mode,
-            encoding=out_charset_name,
-            errors=out_charset_error_mode,
-            closefd=should_close_out_file,
-            )
-        if should_close_out_file:
-            out_file = out_io
-        out_csv = csv2.CsvWriter(
-            out_io,
-            delimiter=out_delimiter,
-            lineterminator=out_row_terminator,
-            quotechar=out_quote_symbol,
-            )
-        # @contextmanager: enter: yield this object to the with statement:
-        yield out_csv
-        # @contextmanager: exit: after the yield close the stream:
-        if should_close_out_file and out_file:
-            out_file.close()
+    def open_writer(self, arg_obj, file_name, out_io, err_io):
+        """ Open a CSV writer using commandline argument options. """
+        return open_csv_writer(
+                out_io,
+                file_name,
+                encoding=arg_obj.out_charset_name,
+                errors=arg_obj.out_charset_error_mode,
+                delimiter=arg_obj.out_delimiter,
+                lineterminator=arg_obj.out_row_terminator,
+                quotechar=arg_obj.out_quote_symbol,
+                )
 
-    @contextmanager
-    def open_reader(self, file_name, in_io, err_io):
-        """ Open an input CSV reader, and return an iterator that can read rows. """
-        # set global CSV column width
-        arg_obj = self
-        csv_cell_width_limit = arg_obj.csv_cell_width_limit
-        in_file_name = file_name
-        in_charset_name = arg_obj.in_charset_name
-        in_charset_error_mode = arg_obj.in_charset_error_mode
-        in_delimiter = arg_obj.in_delimiter
-        in_row_terminator = arg_obj.in_row_terminator
-        in_quote_symbol = arg_obj.in_quote_symbol
+    def open_reader(self, arg_obj, file_name, in_io, err_io):
+        """ Open a CSV reader using commandline argument options. """
+        return open_csv_reader(
+                in_io,
+                file_name,
+                encoding=arg_obj.in_charset_name,
+                errors=arg_obj.in_charset_error_mode,
+                delimiter=arg_obj.in_delimiter,
+                lineterminator=arg_obj.in_row_terminator,
+                quotechar=arg_obj.in_quote_symbol,
+                csv_cell_width_limit=arg_obj.csv_cell_width_limit,
+                )
 
-        if csv_cell_width_limit:
-            csv2.set_global_csv_field_size_limit(csv_cell_width_limit)
-
-        in_file = None
-        read_text_io_mode = 'r'
-        in_file_id = in_file_name
-        should_close_in_file = True
-        if not in_file_id:
-            in_file_id = in_io.fileno()
-            should_close_in_file = False
-        in_io = csv2.csv_open(
-            in_file_id,
-            mode=read_text_io_mode,
-            encoding=in_charset_name,
-            errors=in_charset_error_mode,
-            closefd=should_close_in_file,
-            )
-        if should_close_in_file:
-            in_file = in_io
-
-        in_csv = csv2.CsvReader(
-            in_io,
-            delimiter=in_delimiter,
-            lineterminator=in_row_terminator,
-            quotechar=in_quote_symbol,
-            )
-        # @contextmanager: enter: yield this object to the with statement:
-        yield in_csv
-        # @contextmanager: exit: after the yield close the stream:
-        if should_close_in_file and in_file:
-            in_file.close()
-
-    def main(self, argv, in_io, out_io, err_io):
+    def main(self, argv, stdin, stdout, stderr):
         """ Implements main entry point function. """
         exe = self
         exit_code = 0
@@ -278,9 +266,9 @@ class CsvTranslateProcessor(object):
         try:
             arg_obj = exe.parse_args(argv)
             if arg_obj.should_print_help:
-                exe.print_help(out_io)
+                exe.print_help(stdout)
             else:
-                exit_code = exe.execute(arg_obj, in_io, out_io, err_io)
+                exit_code = exe.execute(arg_obj, stdin, stdout, stderr)
         except IOError as exc:
             if exc.errno == errno.EPIPE:
                 # (also BrokenPipeError python 3)
@@ -289,15 +277,12 @@ class CsvTranslateProcessor(object):
             elif exc.errno == errno.ENOENT:
                 # (also FileNotFoundError python 3)
                 error_message = "File '{FileName}' not found.".format(FileName=exc.filename)
-                exit_code = 1
             else:
                 raise
         except UnicodeError as exc:
             error_message = str(exc)
-            exit_code = 1
-            raise
         if error_message:
-            err_io.write("Error: {E}\n".format(E=error_message))
+            stderr.write("Error: {E}\n".format(E=error_message))
             exit_code = 1
         return exit_code
 
@@ -305,8 +290,8 @@ class CsvTranslateProcessor(object):
         """ Execute the csv processing operation. """
         exit_code = 0
         exe = self
-        with exe.open_reader(arg_obj.in_file_name, in_io, err_io) as in_csv:
-            with exe.open_writer(arg_obj.out_file_name, out_io, err_io) as out_csv:
+        with exe.open_reader(arg_obj, arg_obj.in_file_name, in_io, err_io) as in_csv:
+            with exe.open_writer(arg_obj, arg_obj.out_file_name, out_io, err_io) as out_csv:
                 for row in exe.process(in_csv):
                     out_csv.writerow(row)
         return exit_code
@@ -352,10 +337,10 @@ class CsvTranslateProcessor(object):
             out_row_count += 1
 
 
-def main(argv, in_io, out_io, err_io):
+def main(argv, stdin, stdout, stderr):
     """ Main entry point for program. """
     exe = CsvTranslateProcessor()
-    return exe.main(argv, in_io, out_io, err_io)
+    return exe.main(argv, stdin, stdout, stderr)
 
 
 def console_main():

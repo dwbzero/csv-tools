@@ -3,10 +3,13 @@
 
 import sys
 
-from .csv_translate import CsvTranslateProcessor
+if __name__ == "__main__":
+    from csv_translate import CsvTranslateProcessor
+else:
+    from .csv_translate import CsvTranslateProcessor
 
 
-HELP_TEXT = """{program_name} tool version 20170602:20200516
+HELP_TEXT = """{program_name} tool version 20170602:20201225
 Counts CSV rows and cells
 
 {program_name} [OPTIONS] [InputFile]
@@ -15,10 +18,10 @@ OPTIONS
     -E {E}  Input file text encoding (e.g. 'utf-8', 'windows-1252')
     -S {S}  Input file field delimiter (default ',')
     -W {S}  Input line terminator (default '\\r\\n')
-    --header   print a header row containing counter names
-    --cells    print cell count
-    --columns  print column count (of first row only)
-    --rows     print row count (includes header row)
+    -h,--header   print a header row containing counter names
+    --cells       print cell count
+    --columns     print column count (of first row only)
+    --rows        print row count (includes header row)
 
 By default, prints rows, columns, cells, and file name as a CSV row.
 """
@@ -36,11 +39,10 @@ class CsvCountProcessor(CsvTranslateProcessor):
     should_print_column_count = None
     help_text = HELP_TEXT
 
-    def parse_next_arg(self, arg, arg_iter):
+    def parse_next_arg(self, arg_obj, arg, arg_iter):
         """ Override to parse custom args. """
         succeeded = True
-        arg_obj = self
-        if arg in ("--header", "--header-out"):
+        if arg in ("-h", "--header", "--header-out"):
             arg_obj.should_print_header_row = True
         elif arg in ("--rows",):
             arg_obj.should_print_custom_count = True
@@ -52,7 +54,7 @@ class CsvCountProcessor(CsvTranslateProcessor):
             arg_obj.should_print_custom_count = True
             arg_obj.should_print_cell_count = True
         else:
-            succeeded = super(CsvCountProcessor, self).parse_next_arg(arg, arg_iter)
+            succeeded = super(CsvCountProcessor, self).parse_next_arg(arg_obj, arg, arg_iter)
         return succeeded
 
     def parse_args(self, argv):
@@ -122,4 +124,4 @@ def console_main():
 
         
 if __name__ == "__main__":
-    console_main()
+    sys.exit(console_main())
