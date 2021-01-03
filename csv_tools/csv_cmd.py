@@ -29,6 +29,8 @@ COMMANDS:
     join       : Joinn CSV documents by common column values.
     json       : Convert between a simple JSON document and CSV.
     ls         : Write a file listing in CSV format.
+    lsv        : Convert between CSV and Line Separated Value data.
+    plot       : Plot numeric data in a CSV format to a character stream.
     prepend    : Insert rows at start of CSV stream.
     print      : Print CSV in fixed-width columns.
     rejoin     : Expand value lists embedded in a CSV columns into rows.
@@ -39,6 +41,7 @@ COMMANDS:
     sort       : Sort CSV rows in memory.
     tail       : Omit all except the final rows of a CSV stream.
     translate  : Translate between CSV encodings. Skip and omit tail rows.
+    wsv        : Convert between CSV and Whitespace Separated Value data.
 """
 
 
@@ -105,6 +108,10 @@ def main(argv, in_io, out_io, err_io):
         from .csv_json import main as cmd_main
     elif cmd_name == "ls":
         from .csv_ls import main as cmd_main
+    elif cmd_name == "lsv":
+        from .csv_lsv import main as cmd_main
+    elif cmd_name == "plot":
+        from .csv_plot import main as cmd_main
     elif cmd_name == "prepend":
         from .csv_prepend import main as cmd_main
     elif cmd_name == "print":
@@ -125,6 +132,8 @@ def main(argv, in_io, out_io, err_io):
         from .csv_tail import main as cmd_main
     elif cmd_name == "translate":
         from .csv_translate import main as cmd_main
+    elif cmd_name == "wsv":
+        from .csv_wsv import main as cmd_main
     else:
         err_str = "Unknown command: " + cmd_name
 
