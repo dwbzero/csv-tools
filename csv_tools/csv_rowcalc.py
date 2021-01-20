@@ -41,6 +41,8 @@ from ._csv_helpers import (
     )
 
 def main(arg_list, stdin, stdout, stderr):
+    DEFAULT_BUFFERING = -1
+    LINE_BUFFERING = 1
     in_io = stdin
     out_io = stdout
     err_io = stderr
@@ -57,6 +59,7 @@ def main(arg_list, stdin, stdout, stderr):
     output_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     input_charset_error_mode = 'strict'  # 'strict' | 'ignore' | 'replace' | 'backslashreplace'
     csv_cell_width_limit = 4*1024*1024  # python default is 131072 = 0x00020000
+    output_buffering = DEFAULT_BUFFERING
     input_row_start_offset = 0
     input_row_count_max = None
     output_row_count_max = None
@@ -83,6 +86,10 @@ def main(arg_list, stdin, stdout, stderr):
                 arg_index += 1
                 arg = arg_list[arg_index]
                 output_file_name = arg
+        elif (arg == "-l"
+          or arg == "--line-buffering-out"
+          ):
+            output_buffering = LINE_BUFFERING
         elif (arg == "-E"
           or arg == "--charset-in"
           or arg == "--encoding-in"
@@ -297,6 +304,7 @@ def main(arg_list, stdin, stdout, stderr):
                 ,encoding=output_charset_name
                 ,newline=out_newline_mode
                 ,errors=output_charset_error_mode
+                ,buffering=output_buffering
                 ,closefd=out_close_file
                 )
             if (out_close_file):
